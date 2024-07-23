@@ -41,6 +41,7 @@ from modules.personality import Personality
 from modules.braillespeak import Braillespeak
 from modules.buzzer import Buzzer
 from modules.pitemperature import PiTemperature
+from modules.osc_module import start_osc_server
 
 from modules.translator import Translator
 
