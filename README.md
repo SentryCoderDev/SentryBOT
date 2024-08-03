@@ -7,6 +7,9 @@
    
 </div>
 
+# Special Thanks to OpenBCI
+I would like to give a special thank you to the OpenBCI team for their support and contribution during the development of this project. OpenBCI's generous donations and technical support played a critical role in bringing this project to fruition.
+Again, my sincere thanks to the OpenBCI team for their support, guidance and belief. Without their help, the success of this project would not have been possible.
 
 # Robotics development framework
 This platform was built to modularize robotics development and experimentation with Python/C++ using Raspberry Pi/Jetson nano and Arduino.
@@ -36,11 +39,15 @@ For manual control via keyboard
 ```
 ./manual_startup.sh
 ```
-
+For control by thought through the brain
+```
+./bci_startup.sh
+```
 Contains a preview of the video feed to get started (not available via SSH)
 ```
 ./preview_startup.sh
 ```
+
 
 ### Testing
 ```
@@ -87,8 +94,52 @@ note: it contains two different piservos, one for nltk and one for motion sensor
 ### NLTK
 NLTK analyzes a text and evaluates the degree to which the text is positive or negative. The antenna again uses the piservo control to perform an animation of this evaluation.
 
+### OpenBCI Ultracortex Mark IV
+Uses Brain Computer Interface to control the robot with an OpenBCI Ultracortex Mark IV. More information about Brain Computer Interface: https://openbci.com/community/openbci-discovery-program-sentrybot-bci-cbi/
+
+## Instructions on OpenBCI Ultracortex Mark IV Setup:
+Reference Guide: https://openbci.com/community/use-your-imagination-power-to-control-robots-and-devices/
+
+Motor imagery (MI)-based brain-computer interface (BCI) is one of the core concepts of BCI. The user can generate induced activity from the motor cortex by imagining motor movements without any limb movements or external stimuli.
+
+In this guide, we will learn how to use OpenBCI equipment for engine dreaming. To this end, we will design a BCI system that allows the user to control a system by imagining different movements of their limbs.
+
+### Materials required
+
+1. 16 Channel or 8 Channel Cyton Board
+2. Ultracortex EEG headset
+3. ThinkPulse™ Active Electrodes
+5. Computer with installed NeuroPype and OpenBCI GUI (I used Jetson Orin Nano, which is at the head of the Robot, as the computer)
+
+2. How to connect hardware
+If you are using the assembled Ultracortex IV, all you need to do is place the spiky electrodes on the following 10-20 locations: C3 ,Cz, C4, P3, Pz, P4, O1, O2 and FPz. If you want to assemble the headset yourself follow tutorial from OpenBCI Documents.
+
+Next, connect the electrodes to the Cyton board pins as shown on the table below.
+
+### Electrode Setup for Cyton Board
+
+| Electrode | Cyton Board Pin    |
+|-----------|--------------------|
+| C3        | Bottom N1P pin     |
+| Cz        | Bottom N2P pin     |
+| C4        | Bottom N3P pin     |
+| P3        | Bottom N4P pin     |
+| Pz        | Bottom N5P pin     |
+| P4        | Bottom N6P pin     |
+| O1        | Bottom N7P pin     |
+| O2        | Bottom N8P pin     |
+| Fpz       | Bottom BIAS pin    |
+| Ear Clip  | Bottom SRB pin (SRB2) |
+
+## Electrode Placement for Motor Imagery
+
+![Electrode Placement](![1_d4csJzqCzMEel-8Z-Jh5iQ](https://github.com/user-attachments/assets/b3be429b-16fb-48d1-835c-45df84d5dc07))
+
+
+
 ### Stereo MEMS Microphones
 GPIO 18, 19 and 20 are used to use stereo MEMS microphones as audio input.
+
 ```
 Mic 3V - Connects to Pi 3.3V.
 Mic GND - Connects to Pi GND.
