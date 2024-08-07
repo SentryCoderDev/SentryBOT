@@ -20,7 +20,7 @@ def handle_prediction(left, right):
     if left > 0.6:
         animation_name = 'Llft'  # Load 'Llft' animation for left
     elif right > 0.6:
-        animation_name = 'Rlift'  # Load 'Rlift' animation for right
+        animation_name = 'Rlft'  # Load 'Rlft' animation for right
     else:
         animation_name = 'lower'  # Load 'lower' animation
 
