@@ -41,7 +41,7 @@ from modules.personality import Personality
 from modules.braillespeak import Braillespeak
 from modules.buzzer import Buzzer
 from modules.pitemperature import PiTemperature
-from modules.osc_module import start_osc_server
+from modules.osc_module import StartOSCServer
 
 from modules.translator import Translator
 
@@ -58,8 +58,11 @@ from modules.translator import Translator
 
 
 def mode():
-    if len(sys.argv) > 1 and sys.argv[1] == 'manual':
-        return Config.MODE_KEYBOARD
+    if len(sys.argv) > 1:
+        if sys.argv[1] == 'manual':
+            return Config.MODE_KEYBOARD
+        elif sys.argv[1] == 'bci':
+            return Config.MODE_BCI
     return Config.MODE_LIVE
 
 def main():
@@ -119,7 +122,11 @@ def main():
 
     pub.sendMessage('tts', msg='I am awake.')
     pub.sendMessage('speak', msg='hi')
-
+    
+    if mode() == Config.MODE_BCI:
+        osc_server = StartOSCServer()
+        osc_server.start_server()
+      
     if mode() == Config.MODE_LIVE:
         # Vision / Tracking
         preview = False
