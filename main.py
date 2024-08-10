@@ -124,10 +124,12 @@ def main():
     pub.sendMessage('speak', msg='hi')
     
     if mode() == Config.MODE_BCI:
+        print("BCI mode selected. Starting OSC server...")
         osc_server = StartOSCServer()
         osc_server.start_server()
       
     if mode() == Config.MODE_LIVE:
+        print("Live mode selected. Starting Raspberry Pi Camera Module 3 ")
         # Vision / Tracking
         preview = False
         if len(sys.argv) > 1 and sys.argv[1] == 'preview':
