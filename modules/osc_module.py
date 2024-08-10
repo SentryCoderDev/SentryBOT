@@ -1,3 +1,4 @@
+# osc_module.py
 import json
 import os
 from pubsub import pub
@@ -47,7 +48,3 @@ class StartOSCServer:
         print("OSC server started.")
         while True:
             sleep(1)
-
-if __name__ == "__main__":
-    osc_server = StartOSCServer()
-    osc_server.start_server()
