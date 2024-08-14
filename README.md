@@ -226,6 +226,18 @@ If everything is configured properly, you will see two windows displaying the Cl
 
 ![image](https://github.com/user-attachments/assets/b859b84f-df6f-4f7b-a643-bdc9ddf17924)
 
+## Coming Soon: OpenBCI UltraCortex Mark IV Features
+We are excited to announce upcoming updates for our project, which will include advanced features for the OpenBCI UltraCortex Mark IV. Here's what's coming next:
+
+4-Way Control Mechanism: Enhance your experience with our new EMG joystick widget, allowing intuitive and precise control. Watch demo video to see it in action!
+Stay tuned for more updates as we continue to innovate and improve SentryBOT
+
+<h1><a href="https://www.youtube.com/watch?v=-cbZ1JBfVgk"> -> Click on the Thunbnail and watch it on youtube: <- </a></h1>
+
+
+[![Video Thumbnail](https://img.youtube.com/vi/-cbZ1JBfVgk/maxresdefault.jpg)](https://www.youtube.com/watch?v=-cbZ1JBfVgk)
+
+
 
 ### Stereo MEMS Microphones
 GPIO 18, 19 and 20 are used to use stereo MEMS microphones as audio input.
