@@ -39,6 +39,7 @@ class Config:
     MODE_OFF = 4
     MODE_KEYBOARD = 5
     MODE_LIVE = 6
+    MODE_BCI = 7  # New BCI mode 
 
 
     # VISION_TECH = 'coral' # or 'opencv'

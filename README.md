@@ -7,17 +7,13 @@
    
 </div>
 
+# Special Thanks to OpenBCI
+I would like to give a special thank you to the OpenBCI team for their support and contribution during the development of this project. OpenBCI's generous donations and technical support played a critical role in bringing this project to fruition.
+Again, my sincere thanks to the OpenBCI team for their support, guidance and belief. Without their help, the success of this project would not have been possible.
 
 # Robotics development framework
 This platform was built to modularize robotics development and experimentation with Python/C++ using Raspberry Pi/Jetson nano and Arduino.
 
-## Coral USB Accelerator
-
-To use the Googla Coral USB Accelerator, first reprint the Pi SD card with the image included in the AIY Maker Kit.
-
-(I tried to install the required software included in the Coral getting started guide, but was unsuccessful due to an error that "GLIBC_2.29" was not found.)
-
-Alternatively, you can opt for the original (slower) facial recognition process by setting Config.VISION_TECH to opencv. I'm no longer updating this section, so you may encounter some integration issues.
 
 ## Setup
 ```
@@ -36,11 +32,15 @@ For manual control via keyboard
 ```
 ./manual_startup.sh
 ```
-
+For control by thought through the brain
+```
+./bci_startup.sh
+```
 Contains a preview of the video feed to get started (not available via SSH)
 ```
 ./preview_startup.sh
 ```
+
 
 ### Testing
 ```
@@ -87,8 +87,161 @@ note: it contains two different piservos, one for nltk and one for motion sensor
 ### NLTK
 NLTK analyzes a text and evaluates the degree to which the text is positive or negative. The antenna again uses the piservo control to perform an animation of this evaluation.
 
+### OpenBCI Ultracortex Mark IV
+Uses Brain Computer Interface to control the robot with an OpenBCI Ultracortex Mark IV. More information about Brain Computer Interface: https://openbci.com/community/openbci-discovery-program-sentrybot-bci-cbi/
+
+## Instructions on OpenBCI Ultracortex Mark IV Setup:
+Reference Guide: https://openbci.com/community/use-your-imagination-power-to-control-robots-and-devices/
+
+Thank you Rakesh C Jakati for publishing this article
+
+
+![image](https://github.com/user-attachments/assets/402adf93-d3de-418b-bd6d-b6c1f06a06dc)
+
+Motor imagery (MI)-based brain-computer interface (BCI) is one of the core concepts of BCI. The user can generate induced activity from the motor cortex by imagining motor movements without any limb movements or external stimuli.
+
+In this guide, we will learn how to use OpenBCI equipment for engine dreaming. To this end, we will design a BCI system that allows the user to control a system by imagining different movements of their limbs.
+
+### Materials required
+
+1. 16 Channel or 8 Channel Cyton Board
+2. Ultracortex EEG headset
+3. ThinkPulse™ Active Electrodes
+5. Computer with installed NeuroPype and OpenBCI GUI (I used Jetson Orin Nano, which is at the head of the Robot, as the computer)
+
+2. How to connect hardware
+If you are using the assembled Ultracortex IV, all you need to do is place the spiky electrodes on the following 10-20 locations: C3 ,Cz, C4, P3, Pz, P4, O1, O2 and FPz. If you want to assemble the headset yourself follow tutorial from OpenBCI Documents.
+
+Next, connect the electrodes to the Cyton board pins as shown on the table below.
+
+### Electrode Setup for Cyton Board
+
+| Electrode | Cyton Board Pin    |
+|-----------|--------------------|
+| C3        | Bottom N1P pin     |
+| Cz        | Bottom N2P pin     |
+| C4        | Bottom N3P pin     |
+| P3        | Bottom N4P pin     |
+| Pz        | Bottom N5P pin     |
+| P4        | Bottom N6P pin     |
+| O1        | Bottom N7P pin     |
+| O2        | Bottom N8P pin     |
+| Fpz       | Bottom BIAS pin    |
+| Ear Clip  | Bottom SRB pin (SRB2) |
+
+## Electrode Placement for Motor Imagery
+
+![image](https://github.com/user-attachments/assets/c360d2c6-8fac-4076-a155-f80337d24478)
+
+## Software setup
+Let us design a two-class BCI using the software NeuroPype. NeuroPype is free for academic users and you can get a 30 day trial if you are an individual/startup. You can get started with NeuroPype by clicking here.
+
+## Imagined Movements Classfication
+Open the Neuropype Pipeline Designer application. Go to file and open Simple Motor Imagery Prediction with CSP. We will use the example provided by Neuropype software. 
+
+![image](https://github.com/user-attachments/assets/e98f84f4-cfb5-4ac4-a728-c35ba3932c03)
+
+This pipeline uses EEG to predict whether you are currently imagining a specific limb movement (default: left-hand movement vs. right-hand movement for two-class classification). The output at any given moment is the probability that the person is imagining each type of movement. Because EEG patterns vary between individuals, several nodes (such as Common Spatial Patterns and Logistic Regression) need to adapt based on calibration data specific to the user. This calibration data cannot be arbitrary EEG data; it must meet certain criteria, which is true for most machine learning applications involving EEG data.
+
+Firstly, the node must acquire examples of EEG data for both left-hand and right-hand movements. A single trial per class is insufficient; the node needs approximately 20–50 repetitions when using a full-sized EEG headset. Additionally, these trials must be presented in a more or less randomized order, rather than in blocks of all-left trials followed by all-right trials. This randomized approach is crucial to avoid common beginner mistakes in machine learning with time series data.
+
+## Working With EEG Markers
+![image](https://github.com/user-attachments/assets/7ae281ed-315d-4731-ba6c-1f0ef6c84f80)
+
+For the aforementioned reasons, the EEG signal must be annotated so that one can identify which data points correspond to Class 1 (subject imagines left-hand movement) and which correspond to Class 2 (subject imagines right-hand movement). One way to achieve this is by including a special 'trigger channel' in the EEG, which takes on predefined signal levels to encode different classes (e.g., 0=left, 1=right). In this case, the pipeline assumes that the data packets emitted by the LSL Input node include not just one EEG stream, but also a second stream that contains a list of marker strings along with their timestamps (markers). These are multi-stream packets, and thus, there are two data streams flowing through the entire pipeline. The markers are then interpreted by the rest of the pipeline to indicate the points in time where the EEG data corresponds to a particular class (in this pipeline, a marker with the string 'left' and timestamp 17.5 would indicate that the EEG at 17.5 seconds into the recording is of class 0, and if the marker was 'right', it would indicate class 1).
+
+Of course, the data could contain various other random markers (e.g., 'recording-started', 'user-was-sneezing', 'enter-pressed'), so how does the pipeline determine which markers encode classes and what classes they represent? This binding is established by the Assign Targets node. The settings are shown below. The syntax means that 'left' strings map to class 0, 'right' maps to class 1, and all other strings don't map to anything.
+
+## Segmentation 
+![image](https://github.com/user-attachments/assets/d6e0dfd4-ea08-4c8f-b2d5-ace647c33639) 
+
+The second question is, given that there’s a marker at 17.5 seconds, how does the pipeline determine where, relative to that point in time, to find the relevant EEG pattern that captures the imagined movement? Does it start a second before the marker and end a second after, or does it start at the marker and end 10 seconds later? Extracting the correct portion of the data is typically handled by the Segmentation node, which extracts segments of a specified length relative to each marker. The settings for this pipeline are shown in the picture above and are interpreted as follows: extract a segment that starts 0.5 seconds after each marker and ends 3.5 seconds after that marker (i.e., the segment is 3 seconds long). If you use negative numbers, you can place the segment before the marker.
+
+
+## Acqusition of EEG Data and Markers
+
+Plug in the RFduino dongle, connect electrodes to the cyton board pins. Wear the EEG headset and finally connect the ear clip to SRB. Open the OpenBCI GUI, select the appropriate port number and start streaming data from the Cyton board. Go to the networking tab and select the LSL protocol. Select “TIME-SERIES” data type and start streaming.
+
+![image](https://github.com/user-attachments/assets/8f41a621-e257-4092-84ac-54a5cc2e693a)
+![image](https://github.com/user-attachments/assets/28821931-bab7-46ff-a82e-3d2584e94557)
+
+Before we start classifying the Motor Imagery data, we need to calibrate the system.
+
+## Recording Calibration Data
+The NeuroPype pipeline is doing a great job, but wouldn’t it be nice if we didn’t have to recollect the calibration data each time we run it? It’s often more convenient to record calibration data into a file during the first session and load that file every time we run our pipeline. To achieve this, we need to use the Inject Calibration Data node, which has a second input port for piping in a calibration recording (imported here using Import XDF).
+
+To begin, start the Lab Recorder and find the OpenBCI EEG stream in the window. Next, run the Python script `motorimg_calibrate.py` found in the extras folder of your NeuroPype installation. Then, update the streams in the Lab Recorder. You should now see both the MotorImag-Markers and obci_eeg1 streams along with your computer name.
+
+![image](https://github.com/user-attachments/assets/8d80e981-23c2-4102-966b-eb75b2e2872d)
+
+The python script along with OpenBCI, lab recorder is used to record calibration data. The script sends markers matching what the person is imagining that is ‘Left’ or ‘Right’ and instructs the user when to imagine that movement which will be stored in the .xdf file along with the EEG data.
+
+Run the python script and start recording the OpenBCI stream and markers stream using the lab recorder. Follow the instructions shown on the window: when the window shows ‘R’  imagine moving your right arm, and when it shows ‘L’   imagine moving your left arm.  It takes about half a second for a person to read the instruction and begin imagining the movement, and he/she will finish about 3 seconds later and get ready for the next trial. This is why the segment time limits in segmentation node are set to (0.5,3.5).
+
+You can configure the number of trials per class and other parameters in motorimg_calibrate.py. 
+
+## Import Calibration Data 
+
+You need to edit a few nodes in this pipeline. You should delete these three nodes (Import SET, Stream Data, LSL Output) at the bottom of the pipeline design as we will use our own recorded calibration data.
+
+![image](https://github.com/user-attachments/assets/13fa2c82-78df-4002-b19e-cb2a615f3cbd)
+
+Delete these nodes from the Pipeline Design
+
+Delete the Import Set node that is connected to Inject Calibration Data and replace it with Import XDF as the calibration data is recorded in .xdf format.
+
+![image](https://github.com/user-attachments/assets/2b084f5a-743e-4a8c-b841-400bc5f484b9)
+![image](https://github.com/user-attachments/assets/d9cea511-398c-4a0f-b6ff-4854b6361a91)
+
+Enter the calibration data filename
+
+Fill in the appropriate filename of the XDF file in the window.
+
+## Picking up Marker Streams with LSL
+![image](https://github.com/user-attachments/assets/9d0825ef-94bd-4ece-945a-7eeb7b3ff638)
+
+The LSL Input node is responsible for returning a marker stream together with the EEG. Enter the name of the OpenBCI stream in the query and after you import the .xdf calibration data, you are ready to go.
+
+## Streaming the Data
+
+OSC output node to stream data
+Connect an OSC (Open sound control) Output node to the Logistic Regression node in the pipeline designer and configure it as shown below before you stream the data.
+
+![image](https://github.com/user-attachments/assets/04ae4d64-9870-4367-9a8e-798e3e7b3d44)
+
+Type in the IP address of the device to which you want to stream the data, which can be either an Arduino or a Raspberry Pi). Use 127.0.0.1 as an IP address if you want to receive the data on your local computer.
+
+
+## Running the NeuroPype pipeline
+
+![image](https://github.com/user-attachments/assets/d9eacb95-f493-437c-ae26-6cd689c6fe98)
+
+We are in the final stage of the Motor Imagery Classification pipeline design. To run the pipeline, follow these steps:
+
+1. Right-click on the NeuroPype icon in the taskbar and select "Run Pipeline."
+2. Navigate to your file path and select your edited pipeline file, `simplemotorimagery.pyp`.
+3. Run the pipeline.
+
+If everything is configured properly, you will see two windows displaying the Classification and Misclassification Rate. You can now observe real-time predictions for either left or right movements in these windows. Imagine moving your right arm to increase the amplitude power of the right prediction and imagine moving your left arm to increase the amplitude power of the left prediction.
+
+![image](https://github.com/user-attachments/assets/b859b84f-df6f-4f7b-a643-bdc9ddf17924)
+
+## Coming Soon: OpenBCI UltraCortex Mark IV Features
+We are excited to announce upcoming updates for our project, which will include advanced features for the OpenBCI UltraCortex Mark IV. Here's what's coming next:
+
+4-Way Control Mechanism: Enhance your experience with our new EMG joystick widget, allowing intuitive and precise control. Watch demo video to see it in action!
+Stay tuned for more updates as we continue to innovate and improve SentryBOT
+
+<h1><a href="https://www.youtube.com/watch?v=-cbZ1JBfVgk"> -> Click on the Thunbnail and watch it on youtube: <- </a></h1>
+
+
+[![Video Thumbnail](https://img.youtube.com/vi/-cbZ1JBfVgk/maxresdefault.jpg)](https://www.youtube.com/watch?v=-cbZ1JBfVgk)
+
+
+
 ### Stereo MEMS Microphones
 GPIO 18, 19 and 20 are used to use stereo MEMS microphones as audio input.
+
 ```
 Mic 3V - Connects to Pi 3.3V.
 Mic GND - Connects to Pi GND.
