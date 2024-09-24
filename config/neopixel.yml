@@ -30,6 +30,9 @@ neopixel:
       1,
       1
   ]
+  serial:
+    enabled: true  # Whether to use serial communication for Neopixel commands
+    usb: true      # Enable USB communication
   docs:
     description: "The neopixel module is used to drive neopixel LEDs."
     events:
