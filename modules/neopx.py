@@ -7,18 +7,22 @@ except Exception as e:
     print("Importing config directly")
     from config import Config
 import board
-    
+
+# Import necessary libraries based on the chosen method
 if Config.get('neopixel', 'i2c'):
-    print("Importing i2c config")
+    print("Using I2C configuration")
     import busio
     from rainbowio import colorwheel
     from adafruit_seesaw import seesaw, neopixel
-else:
-    print("Importing GPIO config")
+    connection_type = 'i2c'  # Set the connection type to I2C
+elif Config.get('neopixel', 'usb'):
+    print("Using USB configuration")
     import neopixel
-    
-
-import threading
+    connection_type = 'usb'  # Set the connection type to USB
+else:
+    print("Using GPIO configuration")
+    import neopixel
+    connection_type = 'gpio'  # Set the connection type to GPIO
 
 class NeoPx:
     COLOR_OFF = (0, 0, 0)
@@ -29,9 +33,9 @@ class NeoPx:
     COLOR_WHITE = (100, 100, 100)
     COLOR_WHITE_FULL = (255, 255, 255)
     COLOR_WHITE_DIM = (50, 50, 50)
-    COLOR_RED_TO_GREEN_100 = list(Color("red").range_to(Color("green"),100))
-    COLOR_BLUE_TO_RED_100 = list(Color("blue").range_to(Color("red"),100)) # also passes through green
-    COLOR_BLUE_TO_GREEN_100 = list(Color("blue").range_to(Color("green"),100))
+    COLOR_RED_TO_GREEN_100 = list(Color("red").range_to(Color("green"), 100))
+    COLOR_BLUE_TO_RED_100 = list(Color("blue").range_to(Color("red"), 100))
+    COLOR_BLUE_TO_GREEN_100 = list(Color("blue").range_to(Color("green"), 100))
 
     COLOR_MAP = {
         'red': COLOR_RED,
@@ -45,30 +49,26 @@ class NeoPx:
     }
 
     def __init__(self, count, **kwargs):
-        # Initialise
         self.count = count
+        self.connection_type = connection_type  # Correctly assign connection type
         self.positions = Config.get('neopixel', 'positions')
-        # Manually adjust brightness of individual neopixels
         self.brightness = Config.get('neopixel', 'brightness')
         self.all = range(self.count)
         self.all_eye = ['right', 'top_right', 'top_left', 'left', 'bottom_left', 'bottom_right', 'middle']
         self.ring_eye = ['right', 'top_right', 'top_left', 'left', 'bottom_left', 'bottom_right']
         self.animation = False
         self.thread = None
-        self.overridden = False  # prevent any further changes until released (for flashlight)
-        if Config.get('neopixel', 'i2c'):
+        self.overridden = False
+
+        # Initialize connection based on connection type
+        if self.connection_type == 'i2c':
             self.i2c = busio.I2C(board.SCL, board.SDA)
-            try:
-                ss = seesaw.Seesaw(self.i2c, addr=0x60)
-            except:
-                # If i2c fails, try again
-                self.i2c.deinit()
-                self.i2c = busio.I2C(board.SCL, board.SDA)
-                ss = seesaw.Seesaw(self.i2c, addr=0x60)
-            neo_pin = 15 # Unclear how this is used
-            self.pixels = neopixel.NeoPixel(ss, neo_pin, count, brightness = 0.1)
-        else:
+            self.ss = seesaw.Seesaw(self.i2c, addr=0x60)  # Use self.ss to store the seesaw instance
+            neo_pin = 15
+            self.pixels = neopixel.NeoPixel(self.ss, neo_pin, count, brightness=0.1)
+        elif self.connection_type in ['usb', 'gpio']:
             self.pixels = neopixel.NeoPixel(board.D12, count)
+
         # Default states
         self.set(self.all, NeoPx.COLOR_OFF)
         sleep(0.1)
@@ -86,14 +86,12 @@ class NeoPx:
         pub.subscribe(self.speech, 'speech')
 
     def exit(self):
-        """
-        On close of application carry out clean up
-        """
         if self.animation:
             self.animation = False
             self.thread.join()
         self.set(self.all, NeoPx.COLOR_OFF)
-        self.i2c.deinit()
+        if hasattr(self, 'i2c'):
+            self.i2c.deinit()  # De-initialize only if it was initialized
         sleep(1)
 
     def speech(self, msg):
@@ -103,46 +101,34 @@ class NeoPx:
             self.flashlight(False)
 
     def set(self, identifiers, color, gradient=False):
-        """
-        Set color of pixel
-        (255, 0, 0) # set to red, full brightness
-        (0, 128, 0) # set to green, half brightness
-        (0, 0, 64)  # set to blue, quarter brightness
-        :param identifiers: pixel number (starting from 0) - can be list
-        :param color: string map of COLOR_MAP or tuple (R, G, B)
-        """
         if self.overridden:
             return
-        # convert single identifier to list
-        if type(identifiers) is int:
+        if isinstance(identifiers, int):
             identifiers = [identifiers]
-        elif type(identifiers) is str:
+        elif isinstance(identifiers, str):
             identifiers = [self.positions[identifiers]]
-        # lookup color if string
-        if type(color) is float:
+        if isinstance(color, float):
             color = int(color)
-        if type(color) is int:
-            # Make color gradiant use possible @todo refactor
+        if isinstance(color, int):
             if color >= 100:
-                color = 99 # max in range
+                color = 99
             if gradient == 'br':
                 color = NeoPx.COLOR_BLUE_TO_RED_100[color].rgb
             elif gradient == 'bg':
                 color = NeoPx.COLOR_BLUE_TO_GREEN_100[color].rgb
             else:
                 color = NeoPx.COLOR_RED_TO_GREEN_100[color].rgb
-            color = (round(color[0]*100), round(color[1]*100), round(color[2]*100)) # increase values to be used as LED RGB
-        elif type(color) is str:
+            color = (round(color[0] * 100), round(color[1] * 100), round(color[2] * 100))
+        elif isinstance(color, str):
             color = NeoPx.COLOR_MAP[color]
         for i in identifiers:
-            if type(i) is str:
+            if isinstance(i, str):
                 i = self.positions[i]
-            # print(str(i) + str(color))
             try:
                 if i >= self.count:
                     pub.sendMessage('log', msg='[LED] Error in set pixels: index out of range')
                     print('Error in set pixels: index out of range')
-                    i = self.count-1                
+                    i = self.count - 1
                 self.pixels[i] = self.apply_brightness_modifier(i, color)
             except Exception as e:
                 print(e)
@@ -150,11 +136,12 @@ class NeoPx:
                 pass
         
         self.pixels.show()
-        sleep(.1)
+        sleep(0.1)
 
     def apply_brightness_modifier(self, identifier, color):
-        # Some neopixels do not need to be full brightness. Reduce intensity with the BRIGHTNESS_MODIFIER for each neopixel
-        return (round(color[0]*self.brightness[identifier]), round(color[1]*self.brightness[identifier]), round(color[2]*self.brightness[identifier]))
+        return (round(color[0] * self.brightness[identifier]), 
+                round(color[1] * self.brightness[identifier]), 
+                round(color[2] * self.brightness[identifier]))
 
     def ring(self, color):
         self.set(self.ring_eye, color)
@@ -174,7 +161,7 @@ class NeoPx:
             self.thread.animation = False
             self.thread.join()
         self.set(self.all, NeoPx.COLOR_OFF)
-        sleep(.5)
+        sleep(0.5)
 
     def full(self, color):
         if color in NeoPx.COLOR_MAP.keys():
@@ -186,12 +173,8 @@ class NeoPx:
         if color not in NeoPx.COLOR_MAP.keys():
             raise ValueError('Color not found')
         index = self.positions['middle']
-        if (self.count < index):
-            index = self.count - 1
-            pub.sendMessage('log', msg='[LED] Error in set pixels: index out of range, changing to last pixel')
-        if self.pixels[index] != color:
-            pub.sendMessage('log', msg='[LED] Setting eye colour: ' + color)
-            self.set(index, NeoPx.COLOR_MAP[color])
+        self.set(index, NeoPx.COLOR_MAP[color])
+
 
     def party(self):
         # self.animate(self.all, 'off', 'rainbow_cycle')
@@ -309,6 +292,7 @@ class NeoPx:
             if not getattr(t, "animation", True):
                 return
             sleep(wait_ms / 1000)
+
 
 
 if __name__ == '__main__':
