@@ -19,12 +19,12 @@ import schedule
 # Import modules
 from modules.config import Config
 from modules.actuators.servo import Servo
-from modules.actuators.piservo import PiServo
+from modules.actuators.jetservo import JetsonServo
 from modules.animate import Animate
 # from modules.power import Power
 # from modules.keyboard import Keyboard
 # from modules.gamepad import Gamepad
-from modules.sensor import Sensor
++from modules.jetsensor import JetsonMotionSensor
 # try:
 #     from modules.hotword import HotWord
 # except ModuleNotFoundError as e:
@@ -40,7 +40,7 @@ from modules.personality import Personality
 # from modules.battery import Battery
 from modules.braillespeak import Braillespeak
 from modules.buzzer import Buzzer
-from modules.pitemperature import PiTemperature
++from modules.jettemperature import JetsonTemperature
 from modules.osc_module import StartOSCServer
 
 from modules.translator import Translator
@@ -88,11 +88,11 @@ def main():
         s = servo_conf[key]
         servos[key] = Servo(s['pin'], key, s['range'], s['id'], start_pos=s['start'])
         
-    piservos = dict()
-    piservo_conf = Config.get('piservo','conf')
-    for key in piservo_conf:
-        s = piservo_conf[key]
-        piservos[key] = PiServo(s['pin'], s['range'], start_pos=s['start'])
+    jetservos = dict()
+    jetservo_conf = Config.get('jetservo','conf')
+    for key in jetservo_conf:
+        s = jetservo_conf[key]
+        jetservos[key] = JetsonServo(s['pin'], s['range'], start_pos=s['start'])
 
     # pub.sendMessage('log', msg="[Main] Starting pan test")
     # pub.sendMessage('servo:pan:mvabs', percentage=0)
@@ -118,7 +118,7 @@ def main():
     # tts = TTS(translator=translator)
 
     if Config.get('motion','pin') != '':
-        motion = Sensor(Config.get('motion','pin'))
+        motion = JetsonMotionSensor(Config.get('motion','pin'))
 
     pub.sendMessage('tts', msg='I am awake.')
     pub.sendMessage('speak', msg='hi')
@@ -163,7 +163,7 @@ def main():
         # keyboard = Keyboard()
 
     # gamepad = Gamepad()
-    temp = PiTemperature()
+    temp = JetsonTemperature()
 
     # Voice
     # if Config.get('hotword', 'model') != '':
