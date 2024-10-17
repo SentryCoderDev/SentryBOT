@@ -28,18 +28,19 @@ To update the personality status from another module, publish to the 'behaviour'
 from pubsub import pub
 pub.sendMessage('behaviour', type=Personality.INPUT_TYPE_FUN)
 """
+from jetsensor import JetsonMotionSensor  
 
 class Personality:
-
 
     def __init__(self, **kwargs):
         self.mode = kwargs.get('mode', Config.MODE_LIVE)
         self.state = Config.STATE_SLEEPING
         self.eye = 'blue'
+        self.boredom_level = 0  
 
         pub.subscribe(self.loop, 'loop:1')
         pub.subscribe(self.process_sentiment, 'sentiment')
-        
+        pub.subscribe(self.on_motion_detected, 'motion')  
         behaviours = { 'boredom': Boredom(self),
                        'dream': Dream(self),
                        'faces': Faces(self),
@@ -51,24 +52,53 @@ class Personality:
                        'sentiment': Sentiment(self)}
 
         self.behaviours = SimpleNamespace(**behaviours)
+        self.motion_sensor = JetsonMotionSensor(pin=17)
 
     def loop(self):
         # pub.sendMessage('speech', msg="Hello, I am happy") # for testing sentiment responses
         if not self.is_asleep() and not self.behaviours.faces.face_detected and not self.behaviours.motion.is_motion() and not self.behaviours.objects.is_detected:
+            self.boredom_level += 1
             self.set_eye('red')
+        else:
+            self.boredom_level = 0
 
+        
+        if self.boredom_level > 10:
+            self.random_servo_movement()
+        
+     
+        self.motion_sensor.loop()
+
+       
         if self.state == Config.STATE_ALERT and self.lt(self.behaviours.faces.last_face, self.past(2*60)) and self.lt(self.behaviours.objects.last_detection, self.past(2*60)):
             # reset to idle position after 2 minutes inactivity
             pub.sendMessage('animate', action="wake")
             self.set_state(Config.STATE_IDLE)
 
     def process_sentiment(self, score):
-        pub.sendMessage('log', msg="[Personality] Sentiment: " + str(score))
-        if score > 0:
-            pub.sendMessage('piservo:move', angle=0)
-        else:
-            pub.sendMessage('piservo:move', angle=40)
-        
+       
+        if self.boredom_level <= 10:
+            pub.sendMessage('log', msg="[Personality] Sentiment: " + str(score))
+            if score > 0:
+                pub.sendMessage('jetservo:left_move', angle=0)
+                pub.sendMessage('jetservo:right_move', angle=0)
+            else:
+                pub.sendMessage('jetservo:left_move', angle=40)
+                pub.sendMessage('jetservo:right_move', angle=40)
+
+    def random_servo_movement(self):        
+        pub.sendMessage('log', msg="[Personality] Random Servo Movement due to boredom")
+        left_angle = randint(-30, 30)
+        right_angle = randint(-30, 30)
+        pub.sendMessage('jetservo:left_move', angle=left_angle)
+        pub.sendMessage('jetservo:right_move', angle=right_angle)
+
+    def on_motion_detected(self):
+       
+        pub.sendMessage('log', msg="[Personality] Motion detected, servos moving up like ears")
+        pub.sendMessage('jetservo:left_move', angle=-90)
+        pub.sendMessage('jetservo:right_move', angle=-90)
+
     def set_eye(self, color):
         if self.eye == color:
             return
@@ -79,7 +109,6 @@ class Personality:
     def set_state(self, state):
         if self.state == state:
             return
-
         pub.sendMessage('log', msg="[Personality] State: " + str(state))
         if state == Config.STATE_SLEEPING:
             pub.sendMessage("sleep")
@@ -87,28 +116,28 @@ class Personality:
             pub.sendMessage("animate", action="sit")
             pub.sendMessage("led:off")
             pub.sendMessage("led", identifiers=['status1'], color="off")
-            pub.sendMessage('piservo:move', angle=0)
+            pub.sendMessage('jetservo:move', angle=0)
         elif state == Config.STATE_RESTING:
             pub.sendMessage('rest')
             pub.sendMessage("animate", action="sit")
             pub.sendMessage("animate", action="sleep")
             self.set_eye('blue')
             pub.sendMessage("led", identifiers=['status1'], color="red")
-            pub.sendMessage('piservo:move', angle=-40)
+            pub.sendMessage('jetservo:move', angle=-40)
         elif state == Config.STATE_IDLE:
             if self.state == Config.STATE_RESTING or self.state == Config.STATE_SLEEPING:
                 pub.sendMessage('wake')
                 pub.sendMessage('animate', action="wake")
             pub.sendMessage('animate', action="sit")
             pub.sendMessage("led", identifiers=['status1'], color="green")
-            pub.sendMessage('piservo:move', angle=-20)
+            pub.sendMessage('jetservo:move', angle=-20)
             self.set_eye('blue')
         elif state == Config.STATE_ALERT:
             if self.state == Config.STATE_RESTING or self.state == Config.STATE_SLEEPING:
                 pub.sendMessage('wake')
                 pub.sendMessage('animate', action="wake")
             # pub.sendMessage('animate', action="stand")
-            pub.sendMessage('piservo:move', angle=0)
+            pub.sendMessage('jetservo:move', angle=0)
             pub.sendMessage("led", identifiers=['status1'], color="blue")
         self.state = state
 
