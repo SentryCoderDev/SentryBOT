@@ -1,11 +1,24 @@
-piservo:
+jetservo:
   conf:
-    ear: { id: 0, pin: 12, range: [-40, 40], start: 0 }
+    servo1: { id: 1, pin: 17, range: [0, 180], start: 0 }
+    servo2: { id: 2, pin: 18, range: [0, 180], start: 0 }
   docs:
-    description: "The piservos module is used to control servos via the raspberry pi."
+    description: "The jetservo module is used to control servos on the Jetson Nano."
     events:
       sub:
-        - piservo:move:
-            description: "Move servo to absolute position."
+        - jetservo:move:
+            description: "Move both servos to the same absolute position."
+            args:
+              - angle: integer
+        - jetservo:inversermove:
+            description: "Move servos in inverse directions."
+            args:
+              - angle: integer
+        - jetservo:left_move:
+            description: "Move the left servo to an absolute position."
+            args:
+              - angle: integer
+        - jetservo:right_move:
+            description: "Move the right servo to an absolute position."
             args:
               - angle: integer
