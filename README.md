@@ -3,7 +3,7 @@ This open-source project provides a modular bipedal companion robot and a framew
 
 ## Camera stream submodule
 
-We include the async FastAPI camera stream repo as a git submodule under `external/camera-stream`, but only use the 4 root Python files. To clone with submodules:
+We include the async FastAPI camera stream repo as a git submodule under `modules/camera-stream`, but only use the 4 root Python files. To clone with submodules:
 
 - Fresh clone: `git clone --recurse-submodules <this-repo-url>`
 - If already cloned: `git submodule update --init --recursive`
@@ -11,7 +11,7 @@ We include the async FastAPI camera stream repo as a git submodule under `extern
 Update submodule to latest main:
 
 ```
-git submodule update --remote --merge -- external/camera-stream
+git submodule update --remote --merge -- modules/camera-stream
 git commit -m "Update camera-stream submodule"
 ```
 
