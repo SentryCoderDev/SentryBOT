@@ -1,0 +1,24 @@
+# Camera module configuration (defaults)
+backend: auto           # auto | picamera2 | opencv
+source: 0               # device index or RTSP/HTTP URL for OpenCV
+resolution:
+  width: 1280
+  height: 720
+fps_target: 30          # target send fps for MJPEG stream
+jpeg_quality: 80        # 1-100
+flip: none             # none | h | v | hv | 90 | 180 | 270
+opencv:
+  fourcc: MJPG          # MJPG preferred on Windows webcams
+  buffer_size: 1        # minimize latency
+picamera2:
+  size:
+    width: 1536
+    height: 864
+  format: RGB888
+  frame_rate: 120
+  af_mode: 2
+server:
+  host: 0.0.0.0
+  port: 8000
+logging:
+  level: INFO

@@ -1,4 +1,0 @@
-[submodule "modules/camera-stream"]
-	path = modules/camera-stream
-	url = https://github.com/SentryCoderDev/SentryBOT_Fastapi-Async-Stream
-	branch = main
