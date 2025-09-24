@@ -1,5 +1,6 @@
 #ifndef ROBOT_CONFIG_H
 #define ROBOT_CONFIG_H
+#include <Arduino.h>
 
 // Board serial
 #define ROBOT_SERIAL_BAUD 115200
@@ -17,17 +18,17 @@
 #define STEPPER_COUNT 2 // Ankle integrated skates
 
 // Pins – adapt to your wiring
-// Left leg (2,3,4)
-#define PIN_L_HIP   2
-#define PIN_L_KNEE  3
-#define PIN_L_ANKLE 4
-// Right leg (5,6,7)
-#define PIN_R_HIP   5
-#define PIN_R_KNEE  6
-#define PIN_R_ANKLE 7
-// Head: pan+tilt on 8,9 (pan=8, tilt=9)
-#define PIN_HEAD_PAN  8
-#define PIN_HEAD_TILT 9
+// Left leg 
+#define PIN_L_HIP   15
+#define PIN_L_KNEE  14
+#define PIN_L_ANKLE 13
+// Right leg 
+#define PIN_R_HIP   0
+#define PIN_R_KNEE  1
+#define PIN_R_ANKLE 2
+// Head: pan+tilt
+#define PIN_HEAD_PAN  3
+#define PIN_HEAD_TILT 12
 
 // Stepper pins (moved to avoid servo overlap)
 #define PIN_STEPPER1_STEP 10
@@ -108,5 +109,93 @@ static const uint8_t POSE_SIT[SERVO_COUNT_TOTAL]   = {90,110,60, 90,110,60, 90,9
 #define EEPROM_MAGIC 0x42
 #define EEPROM_ADDR_MAGIC   0
 #define EEPROM_ADDR_IMU_OFF 1   // float2: offPitch, offRoll (8 byte)
+
+// =====================
+// Peripherals (optional)
+// =====================
+
+// I2C LCD (16x1 büyük font modül; çoğu 16x1 aslında 8x2 adreslemeye sahiptir)
+#ifndef LCD_ENABLED
+#define LCD_ENABLED 1
+#endif
+#ifndef LCD_I2C_ADDR
+#define LCD_I2C_ADDR 0x27
+#endif
+#ifndef LCD_COLS
+#define LCD_COLS 16
+#endif
+#ifndef LCD_ROWS
+#define LCD_ROWS 1
+#endif
+
+// RFID (MFRC522 - SPI)
+#ifndef RFID_ENABLED
+#define RFID_ENABLED 1
+#endif
+#ifndef RFID_SS_PIN
+// MEGA: 53 donanımsal SS; RC522 için ayrı SS kullanılabilir
+#define RFID_SS_PIN 53
+#endif
+#ifndef RFID_RST_PIN
+#define RFID_RST_PIN 49
+#endif
+
+// HC-SR04 Ultrasonic
+#ifndef ULTRA_ENABLED
+#define ULTRA_ENABLED 1
+#endif
+#ifndef ULTRA_TRIG_PIN
+#define ULTRA_TRIG_PIN 22
+#endif
+#ifndef ULTRA_ECHO_PIN
+#define ULTRA_ECHO_PIN 23
+#endif
+#ifndef ULTRA_MEASURE_INTERVAL_MS
+#define ULTRA_MEASURE_INTERVAL_MS 50
+#endif
+#ifndef AVOID_ENABLE_DEFAULT
+#define AVOID_ENABLE_DEFAULT 1
+#endif
+#ifndef AVOID_DISTANCE_CM
+#define AVOID_DISTANCE_CM 25.0f
+#endif
+#ifndef AVOID_REVERSE_SPEED
+// Sit/skate modunda engelden kaçma için geri hız (steps/s)
+#define AVOID_REVERSE_SPEED -400.0f
+#endif
+
+// Dual laser pointers (cross lasers)
+#ifndef LASER_ENABLED
+#define LASER_ENABLED 1
+#endif
+#ifndef LASER1_PIN
+#define LASER1_PIN 24
+#endif
+#ifndef LASER2_PIN
+#define LASER2_PIN 25
+#endif
+#ifndef LASER_ACTIVE_HIGH
+#define LASER_ACTIVE_HIGH 1  // 1: HIGH opens laser, 0: LOW opens laser
+#endif
+
+// =====================
+// Servos over I2C (PCA9685)
+// =====================
+#ifndef SERVO_USE_PCA9685
+#define SERVO_USE_PCA9685 1   // 1: use PCA9685 over I2C; 0: use Arduino Servo pins
+#endif
+#ifndef PCA9685_ADDR
+#define PCA9685_ADDR 0x40
+#endif
+#ifndef SERVO_FREQ_HZ
+#define SERVO_FREQ_HZ 50
+#endif
+// Angle to pulse width mapping (typical analog servo)
+#ifndef SERVO_MIN_US
+#define SERVO_MIN_US 500
+#endif
+#ifndef SERVO_MAX_US
+#define SERVO_MAX_US 2500
+#endif
 
 #endif // ROBOT_CONFIG_H
