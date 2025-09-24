@@ -119,6 +119,8 @@ public:
     // Sit animation then detach only knees/ankles (1,2,4,5); keep hips/head
     playSitAnimation();
     servos.detachOne(1); servos.detachOne(2); servos.detachOne(4); servos.detachOne(5);
+    // Reset user drive
+    driveCmd = 0;
   }
 
   // Expose subsystems
@@ -126,6 +128,11 @@ public:
   ServoBus servos;
   StepperPair steppers;
   LegIK2D ik;
+  float driveCmd = 0; // user-requested forward (+)/backward (-) velocity (steps/s)
+
+public:
+  void setDriveCmd(float v){ driveCmd = constrain(v, -skateSpeedLimit, skateSpeedLimit); }
+  float getDriveCmd() const { return driveCmd; }
 
 private:
   // PID state
@@ -142,7 +149,6 @@ private:
   float skateSpeedLimit=SKATE_SPEED_LIMIT;
 
   void balancePid(){
-    if (!balanceEnabled) return;
     unsigned long now = millis();
     if (now - lastPidMs < PID_SAMPLE_MS) return;
     lastPidMs = now;
@@ -151,18 +157,31 @@ private:
     float r = imu.getRoll();
     // Deadband
     if (fabs(p) < PID_DEADBAND_DEG) p = 0; if (fabs(r) < PID_DEADBAND_DEG) r = 0;
-    // Derivative
+    // Derivative (per-sample)
     float dp = p - lastPitch; float dr = r - lastRoll; lastPitch=p; lastRoll=r;
-    // Integrator
+    // Integrator (for servo PID)
     iPitch += p; iRoll += r;
-    // PID outputs
-    float outP = pidKpPitch*p + pidKiPitch*iPitch + pidKdPitch*dp;
-    float outR = pidKpRoll*r  + pidKiRoll*iRoll  + pidKdRoll*dr;
-    outP = constrain(outP, -PID_OUT_LIMIT, PID_OUT_LIMIT);
-    outR = constrain(outR, -PID_OUT_LIMIT, PID_OUT_LIMIT);
-    // Apply as corrective offsets on hip servos (0=L hip, 3=R hip)
-    writeServoLimited(0, servos.get(0) - outP - outR);
-    writeServoLimited(3, servos.get(3) - outP + outR);
+
+    // 1) Servo-based balance (Stand mode or when explicitly enabled)
+    if (balanceEnabled){
+      float outP = pidKpPitch*p + pidKiPitch*iPitch + pidKdPitch*dp;
+      float outR = pidKpRoll*r  + pidKiRoll*iRoll  + pidKdRoll*dr;
+      outP = constrain(outP, -PID_OUT_LIMIT, PID_OUT_LIMIT);
+      outR = constrain(outR, -PID_OUT_LIMIT, PID_OUT_LIMIT);
+      // Apply as corrective offsets on hip servos (0=L hip, 3=R hip)
+      writeServoLimited(0, servos.get(0) - outP - outR);
+      writeServoLimited(3, servos.get(3) - outP + outR);
+    }
+
+    // 2) Skate (stepper) balance in Sit mode: combine user drive with balance correction
+    if (skateBalance && mode==MODE_SIT){
+      float v_corr = skateKp * p + skateKd * dp; // steps/s correction
+      v_corr = constrain(v_corr, -skateSpeedLimit, skateSpeedLimit);
+      float v_cmd = driveCmd + v_corr;
+      v_cmd = constrain(v_cmd, -skateSpeedLimit, skateSpeedLimit);
+      steppers.setSpeedOne(0, v_cmd);
+      steppers.setSpeedOne(1, v_cmd);
+    }
   }
 
   // Simple, smooth stand-up animation
