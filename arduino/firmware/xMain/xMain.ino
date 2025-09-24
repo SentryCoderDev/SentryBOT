@@ -3,10 +3,25 @@
 #include "xProtocol.h"
 #include "xRobot.h"
 #include <EEPROM.h>
+#include "xPeripherals.h"
 
 Robot robot;
 static unsigned long lastHeartbeatMs = 0;
 static bool telemetryOn = false; static unsigned long telemetryInterval = 100; static unsigned long lastTelemetryMs = 0;
+
+#if RFID_ENABLED
+static RfidReader g_rfid;
+static String g_lastRfid;
+#endif
+#if LCD_ENABLED
+static LcdDisplay g_lcd;
+#endif
+#if ULTRA_ENABLED
+static Ultrasonic g_ultra; static float g_ultraCm = NAN; static bool g_avoidEnable = AVOID_ENABLE_DEFAULT;
+#endif
+#if LASER_ENABLED
+static LaserPair g_lasers;
+#endif
 
 void setup(){
   SERIAL_IO.begin(ROBOT_SERIAL_BAUD);
@@ -14,6 +29,18 @@ void setup(){
   // Auto-load IMU offsets if present
   if (EEPROM.read(EEPROM_ADDR_MAGIC)==EEPROM_MAGIC){ float p,r; EEPROM.get(EEPROM_ADDR_IMU_OFF,p); EEPROM.get(EEPROM_ADDR_IMU_OFF+sizeof(float),r); robot.imu.setOffsets(p,r); }
   Protocol::sendOk("ready");
+#if LCD_ENABLED
+  g_lcd.begin(); g_lcd.printLine("READY");
+#endif
+#if RFID_ENABLED
+  g_rfid.begin(RFID_SS_PIN, RFID_RST_PIN);
+#endif
+#if ULTRA_ENABLED
+  g_ultra.begin(ULTRA_TRIG_PIN, ULTRA_ECHO_PIN);
+#endif
+#if LASER_ENABLED
+  g_lasers.begin(LASER1_PIN, LASER2_PIN);
+#endif
 #if BOOT_CALIBRATION_PROMPT
   unsigned long t0 = millis();
   SERIAL_IO.println(F("{\"info\":\"press 'c' + Enter in 2s to calibrate\"}"));
@@ -35,6 +62,56 @@ static void handleJson(const String &line){
   // Very small manual parse for known keys to avoid heavy JSON libs on AVR
   if (line.indexOf("\"cmd\":\"hello\"")>=0){ Protocol::sendOk("hello"); return; }
   if (line.indexOf("\"cmd\":\"hb\"")>=0){ lastHeartbeatMs = millis(); Protocol::sendOk("hb"); return; }
+  if (line.indexOf("\"cmd\":\"lcd\"")>=0){
+#if LCD_ENABLED
+  int p=line.indexOf("\"msg\":\""); if (p>=0){ int e=line.indexOf('"', p+7); String m = (e>p? line.substring(p+7,e):""); g_lcd.printLine(m); Protocol::sendOk("lcd_ok"); }
+  else Protocol::sendErr("no_msg");
+#else
+  Protocol::sendErr("lcd_disabled");
+#endif
+  return;
+  }
+  if (line.indexOf("\"cmd\":\"rfid_last\"")>=0){
+#if RFID_ENABLED
+  String out = String("{\"ok\":true,\"rfid\":\"") + Protocol::escape(g_lastRfid) + "\"}"; SERIAL_IO.println(out);
+#else
+  Protocol::sendErr("rfid_disabled");
+#endif
+  return;
+  }
+  if (line.indexOf("\"cmd\":\"ultra_read\"")>=0){
+#if ULTRA_ENABLED
+  String out = String("{\"ok\":true,\"cm\":") + (isnan(g_ultraCm)?String("null"):String(g_ultraCm,1)) + "}"; SERIAL_IO.println(out);
+#else
+  Protocol::sendErr("ultra_disabled");
+#endif
+  return;
+  }
+  if (line.indexOf("\"cmd\":\"avoid\"")>=0){
+#if ULTRA_ENABLED
+  g_avoidEnable = (line.indexOf("\"enable\":true")>=0);
+  Protocol::sendOk(g_avoidEnable?"avoid_on":"avoid_off");
+#else
+  Protocol::sendErr("ultra_disabled");
+#endif
+  return;
+  }
+  if (line.indexOf("\"cmd\":\"laser\"")>=0){
+#if LASER_ENABLED
+    bool both = (line.indexOf("\"both\":true")>=0);
+    int p = line.indexOf("\"id\":"); int id = 0; if (p>=0) id = line.substring(p+5).toInt();
+    if (line.indexOf("\"on\":true")>=0){
+      if (both){ g_lasers.bothOn(); Protocol::sendOk("laser_both_on"); }
+      else if (id==1 || id==2){ g_lasers.oneOn((uint8_t)id); Protocol::sendOk("laser_on"); }
+      else { Protocol::sendErr("bad_id"); }
+    } else {
+      g_lasers.off(); Protocol::sendOk("laser_off");
+    }
+#else
+    Protocol::sendErr("laser_disabled");
+#endif
+    return;
+  }
   if (line.indexOf("\"cmd\":\"set_servo\"")>=0){
     int idx=-1; float deg=90;
     int p=line.indexOf("\"index\":"); if(p>=0){ idx=line.substring(p+8).toInt(); }
@@ -79,6 +156,8 @@ static void handleJson(const String &line){
     long val=0; int p=line.indexOf("\"value\":"); if(p>=0){ val=line.substring(p+8).toInt(); }
     if (vel){ robot.steppers.setSpeedOne(id, (float)val); }
     else { robot.steppers.moveToOne(id, val); }
+    // Optional: global drive override for sit/skate balance blending
+    int pd=line.indexOf("\"drive\":"); if(pd>=0){ long d=line.substring(pd+8).toInt(); robot.setDriveCmd((float)d); }
     Protocol::sendOk(); return;
   }
   if (line.indexOf("\"cmd\":\"home\"")>=0){
@@ -110,6 +189,10 @@ static void handleJson(const String &line){
   if (line.indexOf("\"cmd\":\"imu_read\"")>=0){ robot.imu.read();
     String msg = String("pitch=")+robot.imu.getPitch()+",roll="+robot.imu.getRoll(); Protocol::sendOk(msg); return; }
   if (line.indexOf("\"cmd\":\"imu_cal\"")>=0){ robot.imu.calibrateLevel(); Protocol::sendOk("imu_calibrated"); return; }
+  if (line.indexOf("\"cmd\":\"drive\"")>=0){
+    long v=0; int p=line.indexOf("\"value\":"); if(p>=0){ v=line.substring(p+8).toInt(); }
+    robot.setDriveCmd((float)v); Protocol::sendOk("drive_set"); return;
+  }
   if (line.indexOf("\"cmd\":\"eeprom_save\"")>=0){
     float p,r; robot.imu.getOffsets(p,r);
     EEPROM.update(EEPROM_ADDR_MAGIC, EEPROM_MAGIC);
@@ -145,8 +228,8 @@ static void handleJson(const String &line){
     p=line.indexOf("\"head_pan\":"); if(p>=0) pan=line.substring(p+11).toFloat();
     p=line.indexOf("\"drive\":"); if(p>=0) drive=line.substring(p+9).toInt();
     robot.head(tilt, pan);
-    // In sit/skate, use drive as forward velocity
-    if (drive!=0) { robot.steppers.setSpeedOne(0, drive); robot.steppers.setSpeedOne(1, drive); }
+    // In sit/skate, set user drive command (mixed with balance correction)
+    robot.setDriveCmd((float)drive);
     Protocol::sendOk("track_ack"); return;
   }
   if (line.indexOf("\"cmd\":\"get_state\"")>=0){
@@ -192,6 +275,31 @@ static void handleJson(const String &line){
 void loop(){
   String line; if (Protocol::readLine(SERIAL_IO, line)) handleJson(line);
   robot.update();
+    // Peripherals polling
+  #if RFID_ENABLED
+    if (g_rfid.poll()){
+      g_lastRfid = g_rfid.lastUid();
+      String evt = String("{\"ok\":true,\"event\":\"rfid\",\"uid\":\"") + Protocol::escape(g_lastRfid) + "\"}";
+      SERIAL_IO.println(evt);
+  #if LCD_ENABLED
+      String tail = g_lastRfid; if (tail.length()>8) tail = tail.substring(tail.length()-8);
+      g_lcd.printLine("RFID:" + tail);
+  #endif
+    }
+  #endif
+  #if ULTRA_ENABLED
+    if (g_ultra.measureIfDue(ULTRA_MEASURE_INTERVAL_MS)){
+      g_ultraCm = g_ultra.lastCm();
+    }
+    if (g_avoidEnable && robot.getMode()==MODE_SIT){
+      if (!isnan(g_ultraCm) && g_ultraCm>0 && g_ultraCm < AVOID_DISTANCE_CM){
+        robot.setDriveCmd(AVOID_REVERSE_SPEED);
+  #if LCD_ENABLED
+        g_lcd.printLine("AVOID:" + String((int)g_ultraCm) + "cm");
+  #endif
+      }
+    }
+  #endif
   // Heartbeat timeout safety
   if (HEARTBEAT_TIMEOUT_MS>0 && (millis() - lastHeartbeatMs > HEARTBEAT_TIMEOUT_MS)){
     robot.estop();
@@ -199,9 +307,16 @@ void loop(){
   // Telemetry periodic output
   if (telemetryOn && millis() - lastTelemetryMs >= telemetryInterval){
     lastTelemetryMs = millis(); robot.imu.read();
-    String out = "{""ok"":true,""telemetry"":true,""pitch"":"; out += robot.imu.getPitch();
-    out += ",""roll"":"; out += robot.imu.getRoll();
-    out += ",""pose"": ["; for (int i=0;i<SERVO_COUNT_TOTAL;i++){ if(i) out += ","; out += (int)robot.servos.get(i);} out += "],""stepper_pos"": ["; out += robot.steppers.pos1(); out += ","; out += robot.steppers.pos2(); out += "]}";
-    SERIAL_IO.println(out);
+      String out = "{\"ok\":true,\"telemetry\":true,\"pitch\":"; out += robot.imu.getPitch();
+      out += ",\"roll\":"; out += robot.imu.getRoll();
+      out += ",\"pose\": ["; for (int i=0;i<SERVO_COUNT_TOTAL;i++){ if(i) out += ","; out += (int)robot.servos.get(i);} out += "],\"stepper_pos\": ["; out += robot.steppers.pos1(); out += ","; out += robot.steppers.pos2(); out += "]";
+  #if RFID_ENABLED
+      out += ",\"rfid\":\""; out += Protocol::escape(g_lastRfid); out += "\"";
+  #endif
+  #if ULTRA_ENABLED
+      out += ",\"ultra_cm\":"; out += (isnan(g_ultraCm)?String("null"):String(g_ultraCm,1));
+  #endif
+      out += "}";
+      SERIAL_IO.println(out);
   }
 }
