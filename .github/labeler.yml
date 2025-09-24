@@ -1,0 +1,103 @@
+# Auto-label PRs based on changed paths (modules/*)
+# Labels are defined in .github/labels.yml and applied here.
+
+"module: animate":
+  - changed-files:
+      - any-glob-to-any-file: modules/animate/**
+  - head-branch: ["(?i).*animate.*"]
+"module: arduino_serial":
+  - changed-files:
+      - any-glob-to-any-file: modules/arduino_serial/**
+  - head-branch: ["(?i).*arduino[_-]?serial.*"]
+"module: calibration":
+  - changed-files:
+      - any-glob-to-any-file: modules/calibration/**
+  - head-branch: ["(?i).*calibration.*"]
+"module: camera":
+  - changed-files:
+      - any-glob-to-any-file: modules/camera/**
+  - head-branch: ["(?i).*camera.*"]
+"module: config_center":
+  - changed-files:
+      - any-glob-to-any-file: modules/config_center/**
+  - head-branch: ["(?i).*config[_-]?center.*"]
+"module: diagnostics":
+  - changed-files:
+      - any-glob-to-any-file: modules/diagnostics/**
+  - head-branch: ["(?i).*diagnostics.*"]
+"module: gateway":
+  - changed-files:
+      - any-glob-to-any-file: modules/gateway/**
+  - head-branch: ["(?i).*gateway.*"]
+"module: hardware":
+  - changed-files:
+      - any-glob-to-any-file: modules/hardware/**
+  - head-branch: ["(?i).*hardware.*"]
+"module: interactions":
+  - changed-files:
+      - any-glob-to-any-file: modules/interactions/**
+  - head-branch: ["(?i).*interactions.*"]
+"module: logwrapper":
+  - changed-files:
+      - any-glob-to-any-file: modules/logwrapper/**
+  - head-branch: ["(?i).*logwrapper.*"]
+"module: mutagen":
+  - changed-files:
+      - any-glob-to-any-file: modules/mutagen/**
+  - head-branch: ["(?i).*mutagen.*"]
+"module: neopixel":
+  - changed-files:
+      - any-glob-to-any-file: modules/neopixel/**
+  - head-branch: ["(?i).*neopixel.*"]
+"module: notifier":
+  - changed-files:
+      - any-glob-to-any-file: modules/notifier/**
+  - head-branch: ["(?i).*notifier.*"]
+"module: ollama":
+  - changed-files:
+      - any-glob-to-any-file: modules/ollama/**
+  - head-branch: ["(?i).*ollama.*"]
+"module: ota":
+  - changed-files:
+      - any-glob-to-any-file: modules/ota/**
+  - head-branch: ["(?i).*ota.*"]
+"module: piservo":
+  - changed-files:
+      - any-glob-to-any-file: modules/piservo/**
+  - head-branch: ["(?i).*piservo.*"]
+"module: scheduler":
+  - changed-files:
+      - any-glob-to-any-file: modules/scheduler/**
+  - head-branch: ["(?i).*scheduler.*"]
+"module: speak":
+  - changed-files:
+      - any-glob-to-any-file: modules/speak/**
+  - head-branch: ["(?i).*speak.*"]
+"module: speech":
+  - changed-files:
+      - any-glob-to-any-file: modules/speech/**
+  - head-branch: ["(?i).*speech.*"]
+"module: state_manager":
+  - changed-files:
+      - any-glob-to-any-file: modules/state_manager/**
+  - head-branch: ["(?i).*state[_-]?manager.*"]
+"module: telemetry":
+  - changed-files:
+      - any-glob-to-any-file: modules/telemetry/**
+  - head-branch: ["(?i).*telemetry.*"]
+"module: vision_bridge":
+  - changed-files:
+      - any-glob-to-any-file: modules/vision_bridge/**
+  - head-branch: ["(?i).*vision[_-]?bridge.*"]
+"module: wiki_rag":
+  - changed-files:
+      - any-glob-to-any-file: modules/wiki_rag/**
+  - head-branch: ["(?i).*wiki[_-]?rag.*"]
+
+# Label PRs targeting dev branch
+"target: dev":
+  - base-branch: ["^dev$"]
+
+# Label feature PRs by branch name prefix (e.g., feat-...)
+"type: feature":
+  - head-branch: ["^(?i)feat[-/].*", "^(?i)feature[-/].*"]

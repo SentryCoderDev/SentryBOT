@@ -1,0 +1,130 @@
+name: Relabel Open PRs
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+jobs:
+  relabel:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      - name: Relabel open PRs by branch and paths
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+
+            // Discover module names from modules/ directory (current default branch)
+            let modules = [];
+            try {
+              const entries = fs.readdirSync('modules', { withFileTypes: true });
+              modules = entries.filter(e => e.isDirectory()).map(e => e.name).sort((a,b)=>a.localeCompare(b));
+            } catch (e) {
+              core.warning(`No modules directory found or not accessible: ${e.message}`);
+            }
+            const normalize = s => (s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+            const canonicalByKey = new Map(modules.map(m => [normalize(m), m]));
+
+            // Fetch existing labels and cache for existence checks
+            const allLabels = await github.paginate(github.rest.issues.listLabelsForRepo, { owner, repo, per_page: 100 });
+            const labelSet = new Set(allLabels.map(l => l.name));
+            const ensureLabel = async (name) => {
+              if (labelSet.has(name)) return;
+              // create with a default color; module labels can be created on-the-fly
+              const color = '0ea5e9'; // sky blue default for new modules
+              try {
+                await github.rest.issues.createLabel({ owner, repo, name, color, description: `Module scope: ${name.replace(/^module: /i,'')}` });
+                labelSet.add(name);
+                core.info(`Created missing label: ${name}`);
+              } catch (e) {
+                core.warning(`Failed to create label '${name}': ${e.message}`);
+              }
+            };
+
+            // Fetch open PRs
+            const prs = await github.paginate(github.rest.pulls.list, { owner, repo, state: 'open', per_page: 100 });
+            core.info(`Found ${prs.length} open PR(s)`);
+
+            for (const pr of prs) {
+              const head = pr.head.ref || '';
+              const base = pr.base.ref || '';
+              const number = pr.number;
+
+              // List changed files
+              const files = await github.paginate(github.rest.pulls.listFiles, { owner, repo, pull_number: number, per_page: 100 });
+              const changed = files.map(f => f.filename);
+
+              const labels = new Set();
+              const detectedModules = new Set();
+
+              // 1) Detect modules directly from changed file paths (authoritative)
+              for (const p of changed) {
+                const parts = p.split('/');
+                const idx = parts.indexOf('modules');
+                if (idx !== -1 && parts.length > idx + 1) {
+                  detectedModules.add(parts[idx + 1]);
+                }
+              }
+
+              // 2) Optional fallback: if none found by paths, try to infer from branch name like feat-<module> or feature/<module>
+              if (detectedModules.size === 0) {
+                const m = /^(?:feat|feature)[-\/]([^\s\/]+)(?:[\/-].*)?$/i.exec(head);
+                if (m && m[1]) detectedModules.add(m[1]);
+              }
+
+              // 3) Map detected module tokens to canonical module folder names when possible
+              const moduleLabels = new Set();
+              for (const token of detectedModules) {
+                const key = normalize(token);
+                const canonical = canonicalByKey.get(key) || token.toLowerCase();
+                moduleLabels.add(`module: ${canonical}`);
+              }
+
+              // 4) Fallback: also match branch against known module names to catch cases like chore/<module>
+              if (moduleLabels.size === 0 && modules.length) {
+                for (const m of modules) {
+                  const re = new RegExp(`(^|[-\\/])${m.replace(/[-_/]/g, '[-_/]')}($|[-\\/])`, 'i');
+                  if (re.test(head)) {
+                    moduleLabels.add(`module: ${m}`);
+                  }
+                }
+              }
+
+              // Add module labels
+              for (const ml of moduleLabels) labels.add(ml);
+
+              // target: dev
+              if (/^dev$/i.test(base)) labels.add('target: dev');
+
+              // type: feature
+              if (/^(feat|feature)[-\\/].*/i.test(head)) labels.add('type: feature');
+
+              if (labels.size > 0) {
+                const toApply = Array.from(labels);
+                const sample = changed.slice(0, 10).join(', ');
+                core.info(`#${number} head='${head}' base='${base}' changed=${changed.length} files`);
+                core.info(`#${number} changed sample: ${sample || '(no files)'}`);
+                core.info(`#${number} detected modules: ${Array.from(detectedModules).join(', ') || '(none)'}`);
+                core.info(`#${number} apply labels: ${toApply.join(', ')}`);
+                // Ensure module labels exist before applying
+                for (const name of toApply) {
+                  if (name.toLowerCase().startsWith('module: ')) {
+                    await ensureLabel(name);
+                  }
+                }
+                await github.rest.issues.addLabels({ owner, repo, issue_number: number, labels: toApply });
+              } else {
+                core.info(`#${number} no labels to apply`);
+              }
+            }
