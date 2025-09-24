@@ -1,0 +1,49 @@
+# Auto-label PRs based on changed paths (modules/*)
+# Labels are defined in .github/labels.yml and applied here.
+
+"module: animate":
+  - modules/animate/**
+"module: arduino_serial":
+  - modules/arduino_serial/**
+"module: calibration":
+  - modules/calibration/**
+"module: camera":
+  - modules/camera/**
+"module: config_center":
+  - modules/config_center/**
+"module: diagnostics":
+  - modules/diagnostics/**
+"module: gateway":
+  - modules/gateway/**
+"module: hardware":
+  - modules/hardware/**
+"module: interactions":
+  - modules/interactions/**
+"module: logwrapper":
+  - modules/logwrapper/**
+"module: mutagen":
+  - modules/mutagen/**
+"module: neopixel":
+  - modules/neopixel/**
+"module: notifier":
+  - modules/notifier/**
+"module: ollama":
+  - modules/ollama/**
+"module: ota":
+  - modules/ota/**
+"module: piservo":
+  - modules/piservo/**
+"module: scheduler":
+  - modules/scheduler/**
+"module: speak":
+  - modules/speak/**
+"module: speech":
+  - modules/speech/**
+"module: state_manager":
+  - modules/state_manager/**
+"module: telemetry":
+  - modules/telemetry/**
+"module: vision_bridge":
+  - modules/vision_bridge/**
+"module: wiki_rag":
+  - modules/wiki_rag/**
