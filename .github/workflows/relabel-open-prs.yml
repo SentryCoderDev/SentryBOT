@@ -1,0 +1,74 @@
+name: Relabel Open PRs
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+jobs:
+  relabel:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      - name: Relabel open PRs by branch and paths
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+
+            // Discover module names from modules/ directory
+            let modules = [];
+            try {
+              const entries = fs.readdirSync('modules', { withFileTypes: true });
+              modules = entries.filter(e => e.isDirectory()).map(e => e.name).sort((a,b)=>a.localeCompare(b));
+            } catch (e) {
+              core.warning(`No modules directory found or not accessible: ${e.message}`);
+            }
+
+            // Fetch open PRs
+            const prs = await github.paginate(github.rest.pulls.list, { owner, repo, state: 'open', per_page: 100 });
+            core.info(`Found ${prs.length} open PR(s)`);
+
+            for (const pr of prs) {
+              const head = pr.head.ref || '';
+              const base = pr.base.ref || '';
+              const number = pr.number;
+
+              // List changed files
+              const files = await github.paginate(github.rest.pulls.listFiles, { owner, repo, pull_number: number, per_page: 100 });
+              const changed = files.map(f => f.filename);
+
+              const labels = new Set();
+
+              // module labels: by path or branch name
+              for (const m of modules) {
+                const modLabel = `module: ${m}`;
+                const pathMatch = changed.some(p => p.startsWith(`modules/${m}/`));
+                const namePattern = new RegExp(m.replace(/[_-]/g, '[_-]?'), 'i');
+                const branchMatch = namePattern.test(head);
+                if (pathMatch || branchMatch) labels.add(modLabel);
+              }
+
+              // target: dev
+              if (/^dev$/i.test(base)) labels.add('target: dev');
+
+              // type: feature
+              if (/^(feat|feature)[-\\/].*/i.test(head)) labels.add('type: feature');
+
+              if (labels.size > 0) {
+                const toApply = Array.from(labels);
+                core.info(`#${number} apply labels: ${toApply.join(', ')}`);
+                await github.rest.issues.addLabels({ owner, repo, issue_number: number, labels: toApply });
+              } else {
+                core.info(`#${number} no labels to apply`);
+              }
+            }
