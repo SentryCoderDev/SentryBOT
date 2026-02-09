@@ -643,8 +643,6 @@ public:
 
   void showServoPrompt();
   void showServoToken();
-  void showPidPrompt();
-  void showPidValue();
 
   void showLaser(){
     const char* modes[] = {"OFF", "L1", "L2", "BOTH"};
@@ -715,7 +713,8 @@ public:
 private:
 
   static int normalizeServoIndex(long v){
-    // Accept both 1-based (1..8) and 0-based (0..7)
+    // Accept both 1-based (1..N) and 0-based (0..N-1) inputs from users
+    if (v >= 1 && v <= SERVO_COUNT_TOTAL) return (int)(v - 1);
     return (int)constrain(v, 0, SERVO_COUNT_TOTAL - 1);
   }
 
