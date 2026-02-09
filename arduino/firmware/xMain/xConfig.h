@@ -17,32 +17,32 @@
 #endif
 #endif
 
-// Servo counts (reduced to only pan/tilt pairs)
-#define SERVO_COUNT_TOTAL 4 // L: tilt,pan  +  R: tilt,pan
-// legacy: removed leg servos (hip,knee,ankle)
+// Servo counts (pan/tilt + 2x Pi servo)
+#define SERVO_COUNT_TOTAL 4
 
 // Stepper counts
 #define STEPPER_COUNT 2 // Ankle integrated skates
 
 // Pins – adapt to your wiring
-// Servos: left and right pan/tilt pairs (pins adapt to your wiring)
-// Left: tilt, pan
-#define PIN_L_TILT  14
-#define PIN_L_PAN   15
-// Right: tilt, pan (reuse previous head pins)
-#define PIN_R_TILT  12
-#define PIN_R_PAN   3
-// Backwards compatibility aliases
-#define PIN_HEAD_TILT PIN_R_TILT
-#define PIN_HEAD_PAN  PIN_R_PAN
+// NOTE: These are PCA9685 channel numbers (0..15) when `SERVO_USE_PCA9685==1`.
+// If using direct Arduino pins (SERVO_USE_PCA9685==0), replace with digital pin numbers.
+// PCA9685 channel mapping:
+//  - 0..15: channels on the board. In this build we use four channels:
+//    6 = pan, 9 = tilt, 7 = pi-servo-1 (ear), 8 = pi-servo-2 (ear)
+// Pan/Tilt (PCA channel numbers)
+#define PIN_PAN   6
+#define PIN_TILT  9
+// Pi servos (ears) — PCA channels
+#define PIN_PI_SERVO_1 7
+#define PIN_PI_SERVO_2 8
 
 // Stepper pins (moved to avoid servo overlap)
 // Updated wiring: STEP/DIR pins
 // Stepper1: STEP=10 DIR=9, Stepper2: STEP=8 DIR=7
-#define PIN_STEPPER1_STEP 10
-#define PIN_STEPPER1_DIR  9
-#define PIN_STEPPER2_STEP 8
-#define PIN_STEPPER2_DIR  7
+#define PIN_STEPPER1_STEP 7
+#define PIN_STEPPER1_DIR  8
+#define PIN_STEPPER2_STEP 9
+#define PIN_STEPPER2_DIR  10
 // Limit switch pins (optional). Use -1 to disable; active LOW by default.
 #ifndef PIN_LIMIT1
 #define PIN_LIMIT1 -1
@@ -54,29 +54,11 @@
 #define LIMIT_ACTIVE_LOW 1
 #endif
 
-// Leg geometry (mm)
-#define THIGH_LEN 94.0f
-#define SHIN_LEN  94.0f
-#define FOOT_LEN  28.0f
-
-// Mechanical offsets (deg)
-#define OFFS_HIP    120.0f
-#define OFFS_KNEE   90.0f
-#define OFFS_ANKLE  85.0f
-
-// Limits (deg)
-#define HIP_MIN   0
-#define HIP_MAX   180
-#define KNEE_MIN  0
-#define KNEE_MAX  180
-#define ANKLE_MIN 20   // conservative to match right ankle min in original
-#define ANKLE_MAX 165
-
-// Head limits (from original)
-#define HEAD_TILT_MIN 60
-#define HEAD_TILT_MAX 120
-#define HEAD_PAN_MIN  30
-#define HEAD_PAN_MAX  150
+// Pan/Tilt limits
+#define PAN_MIN  30
+#define PAN_MAX  150
+#define TILT_MIN 60
+#define TILT_MAX 120
 
 // Motion
 #define SPEED_DEG_PER_S 60 // default easing speed
@@ -104,6 +86,7 @@
 #define BOOT_CALIBRATION_PROMPT 1
 
 // Default poses
+// Default poses: index mapping: 0=pan, 1=tilt, 2=pi_servo_1, 3=pi_servo_2
 static const uint8_t POSE_STAND[SERVO_COUNT_TOTAL] = {90,90, 90,90};
 static const uint8_t POSE_SIT[SERVO_COUNT_TOTAL]   = {90,90, 90,90};
 
