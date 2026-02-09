@@ -14,8 +14,8 @@ enum RobotMode { MODE_STAND, MODE_SIT };
 class Robot {
 public:
   void begin(){
-    // Attach servos (left/right tilt+pan)
-    uint8_t pins[SERVO_COUNT_TOTAL] = {PIN_L_TILT, PIN_L_PAN, PIN_R_TILT, PIN_R_PAN};
+    // Attach servos (pan, tilt, pi servo 1, pi servo 2)
+    uint8_t pins[SERVO_COUNT_TOTAL] = {PIN_PAN, PIN_TILT, PIN_PI_SERVO_1, PIN_PI_SERVO_2};
     servos.attachAll(pins, POSE_STAND);
     servos.setSpeed(SPEED_DEG_PER_S);
 
@@ -44,11 +44,9 @@ public:
   }
 
   void head(float tilt, float pan){
-    // Write tilt/pan to both left and right pairs
-    servos.write(0, constrain(tilt, HEAD_TILT_MIN, HEAD_TILT_MAX));
-    servos.write(1, constrain(pan,  HEAD_PAN_MIN,  HEAD_PAN_MAX));
-    servos.write(2, constrain(tilt, HEAD_TILT_MIN, HEAD_TILT_MAX));
-    servos.write(3, constrain(pan,  HEAD_PAN_MIN,  HEAD_PAN_MAX));
+    // Pan/Tilt are single servos
+    servos.write(0, constrain(pan,  PAN_MIN,  PAN_MAX));
+    servos.write(1, constrain(tilt, TILT_MIN, TILT_MAX));
   }
 
   void calibrateNeutral(){ servos.writePose(POSE_STAND); }
@@ -83,9 +81,9 @@ public:
   void writeServoLimited(int index, float deg){
     float d = deg;
     switch(index){
-      // 0,2 = tilt; 1,3 = pan
-      case 0: case 2: d = constrain(d, HEAD_TILT_MIN, HEAD_TILT_MAX); break;
-      case 1: case 3: d = constrain(d, HEAD_PAN_MIN, HEAD_PAN_MAX); break;
+      // 0 = pan, 1 = tilt
+      case 0: d = constrain(d, PAN_MIN,  PAN_MAX);  break;
+      case 1: d = constrain(d, TILT_MIN, TILT_MAX); break;
       default: break;
     }
     servos.write(index, d);
