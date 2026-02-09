@@ -464,9 +464,15 @@ static inline void handleJson(const String &line){
     // {"cmd":"track","head_tilt":x,"head_pan":y,"drive":v}
     float tilt=90, pan=90;
     long drive=0;
-    int p=line.indexOf("\"head_tilt\":"); if(p>=0) tilt=line.substring(p+12).toFloat();
-    p=line.indexOf("\"head_pan\":"); if(p>=0) pan=line.substring(p+11).toFloat();
+    // Accept legacy "head_tilt"/"head_pan" keys and newer "tilt"/"pan" keys
+    int p=line.indexOf("\"head_tilt\":");
+    if(p>=0) tilt=line.substring(p+12).toFloat();
+    else { p=line.indexOf("\"tilt\":"); if(p>=0) tilt=line.substring(p+7).toFloat(); }
+    p=line.indexOf("\"head_pan\":");
+    if(p>=0) pan=line.substring(p+11).toFloat();
+    else { p=line.indexOf("\"pan\":"); if(p>=0) pan=line.substring(p+6).toFloat(); }
     p=line.indexOf("\"drive\":"); if(p>=0) drive=line.substring(p+9).toInt();
+    // robot.head expects (tilt, pan)
     robot.head(tilt, pan);
     // In sit/skate, set user drive command (mixed with balance correction)
     robot.setDriveCmd((float)drive);
