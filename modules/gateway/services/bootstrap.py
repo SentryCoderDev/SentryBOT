@@ -82,6 +82,16 @@ def _include_speech(app: FastAPI, started: Dict[str, object]) -> None:
     logger.info("module speech mounted")
 
 
+def _include_wakeword(app: FastAPI, started: Dict[str, object]) -> None:
+    from modules.wakeword.xWakewordService import WakewordService  # type: ignore
+    from modules.wakeword.api import get_router as get_wakeword_router  # type: ignore
+    svc = WakewordService()
+    svc.start_background()
+    started["wakeword"] = svc
+    app.include_router(get_wakeword_router(svc))
+    logger.info("module wakeword mounted")
+
+
 def _include_ollama(app: FastAPI, started: Dict[str, object]) -> None:
     from modules.ollama.config_loader import load_config as load_ollama_cfg  # type: ignore
     from modules.ollama.api.router import get_router as get_ollama_router  # type: ignore
@@ -221,6 +231,8 @@ def bootstrap(app: FastAPI, cfg: Dict[str, Any]) -> Dict[str, object]:
         _try(lambda: _include_speak(app, started), "speak")
     if include.get("speech"):
         _try(lambda: _include_speech(app, started), "speech")
+    if include.get("wakeword"):
+        _try(lambda: _include_wakeword(app, started), "wakeword")
     if include.get("ollama"):
         _try(lambda: _include_ollama(app, started), "ollama")
     if include.get("logs"):

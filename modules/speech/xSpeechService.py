@@ -1,7 +1,7 @@
 from __future__ import annotations
 import argparse
 import logging
-from threading import Event
+from threading import Event, Lock
 try:
     import audioop
 except Exception:
@@ -35,6 +35,9 @@ class SpeechService:
     def __init__(self, config_path: Optional[str] = None):
         self.cfg = load_config(config_path)
         self._stop_event = Event()
+        self._listening = False
+        self._listen_lock = Lock()
+        self._thread = None
         self.capture = AudioCapture(self.cfg.get("audio", {}))
         self.recognizer = Recognizer(self.cfg.get("recognition", {}))
         # Direction estimator (optional, needs stereo)
@@ -52,13 +55,21 @@ class SpeechService:
 
         For production, consider running capture in its own thread and feeding a queue.
         """
+        with self._listen_lock:
+            if self._listening:
+                return
+            self._listening = True
         self._stop_event.clear()
-        stream: Iterable[bytes] = self.capture.stream()
-        for result in self.recognizer.run(self._direction_wrapper(stream)):
-            if on_result:
-                on_result(result)
-            if self._stop_event.is_set():
-                break
+        try:
+            stream: Iterable[bytes] = self.capture.stream()
+            for result in self.recognizer.run(self._direction_wrapper(stream)):
+                if on_result:
+                    on_result(result)
+                if self._stop_event.is_set():
+                    break
+        finally:
+            with self._listen_lock:
+                self._listening = False
 
     def _direction_wrapper(self, stream):
         if not self._direction:
@@ -139,12 +150,18 @@ class SpeechService:
 
     def start_background(self, on_result: Optional[Callable[[RecognitionResult], None]] = None) -> None:
         import threading
+        with self._listen_lock:
+            if self._listening:
+                return
         t = threading.Thread(target=self.start, kwargs={"on_result": on_result}, daemon=True)
+        self._thread = t
         t.start()
 
     def stop(self) -> None:
         self._stop_event.set()
         self.capture.stop()
+        with self._listen_lock:
+            self._listening = False
 
     def listen_once(self, timeout_sec: float = 5.0) -> Optional[RecognitionResult]:
         """Listen until first final result or timeout."""
@@ -161,6 +178,11 @@ class SpeechService:
     @property
     def last_angle(self) -> float | None:
         return self._last_angle
+
+    @property
+    def listening(self) -> bool:
+        with self._listen_lock:
+            return self._listening
 
     # Pan-tilt controls
     def track_start(self) -> None:
