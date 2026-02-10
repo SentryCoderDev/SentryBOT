@@ -8,6 +8,7 @@ include:
   interactions: true
   speak: true
   speech: true
+  wakeword: true
   ollama: true
   wiki_rag: true
   camera: true
