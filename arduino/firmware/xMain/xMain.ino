@@ -54,15 +54,8 @@ String g_lastRfid;
 String g_lastSpeech;
 #if LCD_ENABLED
 LcdDisplay g_lcd1;
-#if LCD2_ENABLED
-LcdDisplay g_lcd2;
-#endif
-
-bool g_lcd1Ok = false;
-#if LCD2_ENABLED
-bool g_lcd2Ok = false;
-#endif
-uint8_t g_lcdRouteMask = LCD_TGT_BOTH;
+  bool g_lcd1Ok = false;
+  uint8_t g_lcdRouteMask = LCD_TGT_1;
 LcdStatus g_lcdStatus;
 #endif
 #if ULTRA_ENABLED
@@ -95,9 +88,24 @@ IrKeyReader g_ir;
 IrMenuController g_irMenu;
 #endif
 
+#if HALL_ENCODER_ENABLED
+HallEncoder g_hall0;
+HallEncoder g_hall1;
+#endif
+// OLED instance
+#if OLED_ENABLED
+OledDisplay g_oled;
+#endif
+
 void setup(){
   SERIAL_IO.begin(ROBOT_SERIAL_BAUD);
   robot.begin();
+  // Initialize and attach hall encoders (if enabled) after steppers are started
+#if HALL_ENCODER_ENABLED
+  g_hall0.begin(HALL_PIN_0, 4);
+  g_hall1.begin(HALL_PIN_1, 4);
+  robot.steppers.attachHallEncoders(&g_hall0, &g_hall1);
+#endif
   // Auto-load IMU offsets if present
   if (EEPROM.read(EEPROM_ADDR_MAGIC)==EEPROM_MAGIC){ float p,r; EEPROM.get(EEPROM_ADDR_IMU_OFF,p); EEPROM.get(EEPROM_ADDR_IMU_OFF+sizeof(float),r); robot.imu.setOffsets(p,r); }
   // Load persisted buzzer frequencies if present
@@ -117,7 +125,6 @@ void setup(){
   Wire.setWireTimeout(25000, true);
 #endif
   uint8_t lcd1Addr = LCD_I2C_ADDR;
-  uint8_t lcd2Addr = LCD2_I2C_ADDR;
 
   // Auto-detect LCD1 address: try configured value first, otherwise scan common I2C addresses.
   bool p1 = false;
@@ -128,7 +135,6 @@ void setup(){
     const uint8_t scanCandidates[] = {0x27, 0x3F, 0x3E, 0x26, 0x20, 0x21, 0x22, 0x23, 0x24, 0x25};
     for (size_t si = 0; si < sizeof(scanCandidates); ++si){
       uint8_t a = scanCandidates[si];
-      if (a == lcd2Addr) continue; // avoid colliding with LCD2 default
       if (i2cDevicePresent(a)){
         lcd1Addr = a;
         p1 = true;
@@ -136,36 +142,9 @@ void setup(){
       }
     }
   }
-#if LCD2_ENABLED
-  bool p2 = false;
-  // Try configured address first
-  if (i2cDevicePresent(lcd2Addr)) {
-    p2 = true;
-  } else {
-    // Try common alternative addresses (some backpacks use 0x27 or 0x3F)
-    const uint8_t altCandidates[] = {0x27, 0x3F, 0x3E, 0x26};
-    for (size_t _i = 0; _i < sizeof(altCandidates); ++_i){
-      uint8_t a = altCandidates[_i];
-      if (a == lcd1Addr) continue; // don't clash with primary
-      if (a == lcd2Addr) continue; // already tried
-      if (i2cDevicePresent(a)){
-        lcd2Addr = a;
-        p2 = true;
-        break;
-      }
-    }
-  }
-#else
-  bool p2 = false;
-#endif
-
   g_lcd1Ok = p1;
-#if LCD2_ENABLED
-  g_lcd2Ok = p2;
-#endif
-
   // Auto-promote: if only one LCD exists, prefer treating it as 16x2 (prevents 2x8 split look on 16x2 modules).
-  bool onlyOne = (p1 && !p2) || (!p1 && p2);
+  bool onlyOne = p1;
 
   if (p1){
     uint8_t cols = LCD_COLS;
@@ -178,28 +157,23 @@ void setup(){
     g_lcd1.begin(lcd1Addr, cols, rows, split);
   }
 
-#if LCD2_ENABLED
-  if (p2){
-    uint8_t cols = LCD2_COLS;
-    uint8_t rows = LCD2_ROWS;
-    bool split = (bool)LCD2_16X1_SPLIT_ROW;
-    if (LCD_AUTO_PROMOTE_16X2_IF_SINGLE && onlyOne && cols == 16 && rows == 1){
-      rows = 2;
-      split = false;
-    }
-    g_lcd2.begin(lcd2Addr, cols, rows, split);
-  }
-#endif
 
   // Default routing from config (still falls back to detected if requested target isn't present)
-  if (LCD_ROUTE_DEFAULT == 2) g_lcdRouteMask = LCD_TGT_1;
-  else if (LCD_ROUTE_DEFAULT == 3) g_lcdRouteMask = LCD_TGT_2;
-  else if (LCD_ROUTE_DEFAULT == 1) g_lcdRouteMask = LCD_TGT_BOTH;
-  else g_lcdRouteMask = LCD_TGT_BOTH;
+  // Route always to primary display in single-display firmware
+  g_lcdRouteMask = LCD_TGT_1;
 
   // Eğer iki ekran da yoksa firmware yine çalışır; sadece LCD çıktısı no-op olur.
   g_lcdStatus.begin("READY", 3000);
 
+  // Initialize OLED if present and show logo
+#if OLED_ENABLED
+  if (g_oled.begin(OLED_I2C_ADDR, 128, 64)){
+    g_oled.showLogo();
+    bootInfo("oled", true);
+  } else {
+    bootInfo("oled", false);
+  }
+#endif
     if (BOOT_STATUS_ENABLED && lcdHubAny()){
     bootUiStep("SentryBOT", "BOOT", BOOT_SPLASH_MS);
 
@@ -207,10 +181,6 @@ void setup(){
     bootInfo("lcd1", g_lcd1Ok);
     bootUiStep("LCD1", g_lcd1Ok ? "OK" : "MISSING", g_lcd1Ok ? BOOT_STATUS_OK_MS : BOOT_STATUS_FAIL_MS);
 
-  #if LCD2_ENABLED
-    bootInfo("lcd2", g_lcd2Ok);
-    bootUiStep("LCD2", g_lcd2Ok ? "OK" : "MISSING", g_lcd2Ok ? BOOT_STATUS_OK_MS : BOOT_STATUS_FAIL_MS);
-  #endif
 
     // I2C modules
     // Check both common MPU6050 addresses (0x68 and 0x69) because AD0 pin
@@ -255,9 +225,9 @@ void setup(){
 #endif
 #if IR_ENABLED
   g_ir.begin(IR_PIN);
-#if LCD_ENABLED
-  // IR menü olayları LCD2'de gösterilsin (LCD1 genel durum, LCD2 IR menü)
-  g_irMenu.setLcdPrint([](const String &top, const String &bottom){ g_lcdStatus.showTo(LCD_TGT_2, top, bottom, true); });
+  #if LCD_ENABLED
+  // IR menü olayları ana LCD'de gösterilsin
+  g_irMenu.setLcdPrint([](const String &top, const String &bottom){ g_lcdStatus.showTo(LCD_TGT_1, top, bottom, true); });
 #endif
   g_irMenu.reset();
 #endif
@@ -402,7 +372,7 @@ void loop(){
   g_song.update();
   g_buzzer.update();
 #endif
-  // NeoPixel support removed
+  
   // Heartbeat timeout safety
   if (HEARTBEAT_TIMEOUT_MS>0 && (millis() - lastHeartbeatMs > HEARTBEAT_TIMEOUT_MS)){
     robot.estop();
