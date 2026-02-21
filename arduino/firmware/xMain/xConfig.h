@@ -144,6 +144,12 @@ static const uint8_t POSE_SIT[SERVO_COUNT_TOTAL]   = {90,90, 90,90};
 #define EEPROM_ADDR_BUZZER_FREQ_MAGIC 13
 #define EEPROM_BUZZER_MAGIC 0xA5
 
+// EEPROM addresses for Hall encoder calibration
+#define EEPROM_ADDR_HALL_MAGIC 100
+#define EEPROM_ADDR_HALL_PPR_0 101 // uint16_t
+#define EEPROM_ADDR_HALL_PPR_1 103 // uint16_t
+#define EEPROM_HALL_MAGIC 0x5A
+
 // =====================
 // Peripherals (optional)
 // =====================
@@ -180,22 +186,7 @@ static const uint8_t POSE_SIT[SERVO_COUNT_TOTAL]   = {90,90, 90,90};
 #define LCD_AUTO_PROMOTE_16X2_IF_SINGLE 1
 #endif
 
-// Optional second I2C LCD (typical 16x2). If one display is missing, firmware keeps running with the detected one.
-#ifndef LCD2_ENABLED
-#define LCD2_ENABLED 1
-#endif
-#ifndef LCD2_I2C_ADDR
-#define LCD2_I2C_ADDR 0x27
-#endif
-#ifndef LCD2_COLS
-#define LCD2_COLS 16
-#endif
-#ifndef LCD2_ROWS
-#define LCD2_ROWS 2
-#endif
-#ifndef LCD2_16X1_SPLIT_ROW
-#define LCD2_16X1_SPLIT_ROW 0
-#endif
+// Optional second I2C LCD support removed; single primary LCD (20x4) expected.
 
 // RFID (MFRC522 - SPI)
 #ifndef RFID_ENABLED
@@ -354,21 +345,57 @@ static const uint8_t POSE_SIT[SERVO_COUNT_TOTAL]   = {90,90, 90,90};
 #define SERVO_MAX_US 2500
 #endif
 
+// NeoPixel (WS2812) removed from this firmware build.
+
 // =====================
-// NeoPixel (WS2812) defaults
+// OLED (optional)
 // =====================
-#ifndef NEOPIXEL_ENABLED
-#define NEOPIXEL_ENABLED 0
+#ifndef OLED_ENABLED
+#define OLED_ENABLED 1
 #endif
-#ifndef PIN_NEOPIXEL
-#define PIN_NEOPIXEL 23
+#ifndef OLED_I2C_ADDR
+#define OLED_I2C_ADDR 0x3C
 #endif
-#ifndef NEO_NUM_LEDS
-#define NEO_NUM_LEDS 23
+
+// =====================
+// Hall encoder (optional)
+// =====================
+#ifndef HALL_ENCODER_ENABLED
+#define HALL_ENCODER_ENABLED 1
 #endif
-#ifndef NEO_CONFIG
-// User confirmed working with NEO_RGBW + NEO_KHZ800
-#define NEO_CONFIG (NEO_RGBW + NEO_KHZ800)
+#ifndef HALL_PIN_0
+#define HALL_PIN_0 -1
+#endif
+#ifndef HALL_PIN_1
+#define HALL_PIN_1 -1
+#endif
+#ifndef HALL_DEBOUNCE_MS
+#define HALL_DEBOUNCE_MS 6
+#endif
+
+// Hall sensörleri için manyet/pulse sayısı (varsayılan)
+// Varsayılan: tek manyet (1). Eğer her tekerde farklı sayıda manyet varsa
+// runtime calibrate ile teker başına çarpanı belirleyebilirsiniz.
+#ifndef HALL_PULSES_PER_REV
+#define HALL_PULSES_PER_REV 1
+#endif
+
+// Per-teker alternatif makrolar (isteğe bağlı override)
+#ifndef HALL_PULSES_PER_REV_0
+#define HALL_PULSES_PER_REV_0 HALL_PULSES_PER_REV
+#endif
+#ifndef HALL_PULSES_PER_REV_1
+#define HALL_PULSES_PER_REV_1 HALL_PULSES_PER_REV
+#endif
+
+// Analog Hall sensörü kullanımı için ayarlar
+#ifndef HALL_ANALOG_MODE
+// 1: analogRead() + threshold modunda çalış (analog Hall sensörü), 0: dijitalRead()
+#define HALL_ANALOG_MODE 1
+#endif
+#ifndef HALL_ANALOG_THRESHOLD
+// Analog eşik (0..1023). Sensörün çıkışına göre ayarlayın (varsayılan 512).
+#define HALL_ANALOG_THRESHOLD 512
 #endif
 
 #endif // ROBOT_CONFIG_H

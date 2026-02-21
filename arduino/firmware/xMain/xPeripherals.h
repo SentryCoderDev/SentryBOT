@@ -10,7 +10,11 @@
 #include "peripherals/xLcdDisplay.h"
 #include "peripherals/xLaserPair.h"
 #include "peripherals/xBuzzer.h"
+#include "peripherals/xHallEncoder.h"
+#include "peripherals/xOledDisplay.h"
+#if OLED_ENABLED
+extern class OledDisplay g_oled;
+#endif
+#include "peripherals/logo_Ads_z.h"
 #include "peripherals/xIrKeyReader.h"
-// NeoPixel peripheral removed — feature disabled and code deleted
-
 #endif // ROBOT_PERIPHERALS_H

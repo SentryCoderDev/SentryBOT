@@ -10,18 +10,13 @@
 
 // Shared LCD hub routing constants.
 static constexpr uint8_t LCD_TGT_1 = 0x01;
-static constexpr uint8_t LCD_TGT_2 = 0x02;
+static constexpr uint8_t LCD_TGT_2 = 0x02; // legacy id: maps to primary display when only one present
 static constexpr uint8_t LCD_TGT_BOTH = (LCD_TGT_1 | LCD_TGT_2);
 
 // Globals owned by xMain.ino
 extern LcdDisplay g_lcd1;
 extern bool g_lcd1Ok;
 extern uint8_t g_lcdRouteMask;
-
-#if LCD2_ENABLED
-extern LcdDisplay g_lcd2;
-extern bool g_lcd2Ok;
-#endif
 
 static inline bool i2cDevicePresent(uint8_t addr){
   Wire.beginTransmission(addr);
@@ -39,9 +34,6 @@ static inline void bootInfo(const char *name, bool ok){
 static inline uint8_t lcdHubAvailableMask(){
   uint8_t m = 0;
   if (g_lcd1Ok) m |= LCD_TGT_1;
-#if LCD2_ENABLED
-  if (g_lcd2Ok) m |= LCD_TGT_2;
-#endif
   return m;
 }
 
@@ -59,9 +51,6 @@ static inline uint8_t lcdHubResolveMask(uint8_t requested){
 static inline void lcdHubPrint(uint8_t requestedMask, const String &top, const String &bottom){
   uint8_t m = lcdHubResolveMask(requestedMask);
   if ((m & LCD_TGT_1) && g_lcd1Ok) g_lcd1.printLines(top, bottom);
-#if LCD2_ENABLED
-  if ((m & LCD_TGT_2) && g_lcd2Ok) g_lcd2.printLines(top, bottom);
-#endif
 }
 
 static inline void lcdHubPrintDefault(const String &top, const String &bottom){
