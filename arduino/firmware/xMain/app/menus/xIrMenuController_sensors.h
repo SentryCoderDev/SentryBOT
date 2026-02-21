@@ -61,12 +61,9 @@ void IrMenuController::refreshLive(Robot &robot){
 
     if (_sysSub == 1){
       String a = "MOD";
-#if LCD_ENABLED
+    #if LCD_ENABLED
       a = String("LCD") + (g_lcd1Ok ? "1" : "-");
-#if LCD2_ENABLED
-      a += (g_lcd2Ok ? "2" : "-");
-#endif
-#endif
+    #endif
       String b = String("IMU:") + (robot.imu.isReady() ? "OK" : "NO");
       lcdPrint(a, b);
       return;

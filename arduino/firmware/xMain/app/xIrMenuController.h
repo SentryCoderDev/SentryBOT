@@ -35,12 +35,15 @@ extern float g_ultraCm;
 extern String g_lastRfid;
 #endif
 
+#if HALL_ENCODER_ENABLED
+#include "../peripherals/xHallEncoder.h"
+extern HallEncoder g_hall0;
+extern HallEncoder g_hall1;
+#endif
+
 #if LCD_ENABLED
 extern bool g_lcd1Ok;
 extern uint8_t g_lcdRouteMask;
-#if LCD2_ENABLED
-extern bool g_lcd2Ok;
-#endif
 #endif
 
 class IrMenuController {
@@ -169,35 +172,7 @@ public:
       return;
     }
 
-    // PID menu handling
-    if (_state == STATE_PID_SEL){
-      if (k == "UP") { _pidParam = (_pidParam + 2) % 3; showPidPrompt(); return; }
-      if (k == "DOWN") { _pidParam = (_pidParam + 1) % 3; showPidPrompt(); return; }
-      if (k == "LEFT" || k == "RIGHT") { _pidMotor = 1 - _pidMotor; showPidPrompt(); return; }
-      if (k == "OK") { _state = STATE_PID_VAL; _pidCapture = true; _pidToken = ""; showPidValue(); return; }
-      if (k == "#") { enterHome(); return; }
-      return;
-    }
-
-    if (_state == STATE_PID_VAL){
-      if (k == "#"){ _pidCapture = false; _pidToken = ""; showPidPrompt(); _state = STATE_PID_SEL; return; }
-      if (isDigitKey(k) || k == "."){
-        if (!_pidCapture) { _pidCapture = true; _pidToken = ""; }
-        _pidToken += k; showPidValue(); return;
-      }
-      if (k == "OK"){
-        // commit value
-        float v = _pidToken.toFloat();
-        float kp,ki,kd; robot.steppers.getPidGains(_pidMotor, kp, ki, kd);
-        if (_pidParam==0) kp = v; else if (_pidParam==1) ki = v; else kd = v;
-        robot.steppers.setPidGains(_pidMotor, kp, ki, kd);
-        lcdPrint("PID M" + String(_pidMotor), String((_pidParam==0?"Kp":"K")) + String((_pidParam==0?"p":"")) + ":" + String(v));
-        emitEvent("pid_adjusted", _pidMotor);
-        _pidCapture = false; _pidToken = ""; _state = STATE_PID_SEL; showPidPrompt();
-        return;
-      }
-      return;
-    }
+    // PID menu removed (legacy encoderless tuning)
 
     // Servo flow
     if (_state == STATE_SERVO_SEL || _state == STATE_SERVO_DEG){
@@ -226,7 +201,7 @@ public:
       return;
     }
 
-    // NeoPixel support removed
+    
 
     // Laser control
     if (_state == STATE_LASER){
@@ -470,8 +445,6 @@ public:
   enum State : uint8_t {
     STATE_HOME = 0,
     STATE_MENU,
-    STATE_PID_SEL,
-    STATE_PID_VAL,
     STATE_SERVO_SEL,
     STATE_SERVO_DEG,
     STATE_LASER,
@@ -489,7 +462,7 @@ public:
     MENU_IMU,
     MENU_RFID,
     MENU_SOUND,
-    MENU_PID,
+    MENU_CALIBRATE,
     MENU_SYSTEM,
     MENU_COUNT,
   };
@@ -547,6 +520,7 @@ public:
       case MENU_IMU: return "IMU";
       case MENU_RFID: return "RFID";
       case MENU_SOUND: return "SOUND";
+      case MENU_CALIBRATE: return "CALIB";
       case MENU_SYSTEM: return "SYSTEM";
       default: return "MENU";
     }
@@ -560,18 +534,6 @@ public:
     lcdPrint("MENU", menuName(_menuIndex) + " OK=ENTER");
   }
 
-  void showPidPrompt(){
-    const char* names[] = {"Kp","Ki","Kd"};
-    String top = "PID M" + String(_pidMotor) + " " + String(names[_pidParam]);
-    String bot = "OK=edit L/R=motor";
-    lcdPrint(top, bot);
-  }
-
-  void showPidValue(){
-    String top = "PID M" + String(_pidMotor) + " VAL";
-    String bot = _pidToken.length()>0 ? _pidToken : "(enter num)";
-    lcdPrint(top, bot);
-  }
 
   void enterSelected(Robot &robot){
     switch ((MenuItem)_menuIndex){
@@ -621,14 +583,44 @@ public:
         showSound();
         return;
 
-      case MENU_PID:
-        _state = STATE_PID_SEL;
-        _pidMotor = 0;
-        _pidParam = 0; // 0=kp,1=ki,2=kd
-        _pidToken = "";
-        _pidCapture = false;
-        showPidPrompt();
+      case MENU_CALIBRATE:
+#if HALL_ENCODER_ENABLED
+        _state = STATE_SYSTEM; // reuse system screen to show progress
+        {
+          unsigned long dur = 5000UL;
+          lcdPrint("CALIBRATE", "Rotate wheel...");
+          // reset and sample counts
+          extern HallEncoder g_hall0; extern HallEncoder g_hall1;
+          g_hall0.reset(); g_hall1.reset();
+          unsigned long t0 = millis();
+          while (millis() - t0 < dur){
+            g_hall0.update(); g_hall1.update();
+            // show simple progress
+            unsigned long el = millis() - t0;
+            int pct = (int)constrain((el*100)/dur, 0, 100);
+            lcdPrint(String("CALIB ") + String(pct) + "%", "p0:" + String(g_hall0.getCount()) + " p1:" + String(g_hall1.getCount()));
+            delay(100);
+          }
+          unsigned long c0 = g_hall0.getCount();
+          unsigned long c1 = g_hall1.getCount();
+          uint16_t v0 = (uint16_t)constrain((unsigned long)c0, 0UL, 65535UL);
+          uint16_t v1 = (uint16_t)constrain((unsigned long)c1, 0UL, 65535UL);
+          EEPROM.update(EEPROM_ADDR_HALL_MAGIC, EEPROM_HALL_MAGIC);
+          EEPROM.put(EEPROM_ADDR_HALL_PPR_0, v0);
+          EEPROM.put(EEPROM_ADDR_HALL_PPR_1, v1);
+          lcdPrint("CAL DONE", "p0:" + String(c0) + " p1:" + String(c1));
+#if BUZZER_ENABLED
+          g_buzzer.beepOn(BUZZER_OUT_LOUD, g_buzzerFreqLoud, 200);
+#endif
+          Protocol::sendOk("encoder_calibrated");
+        }
         return;
+#else
+        lcdPrint("CAL", "HALL DISABLED");
+        return;
+#endif
+
+      /* PID menu removed */
 
       case MENU_SYSTEM:
         _state = STATE_SYSTEM;
@@ -690,7 +682,7 @@ public:
 #endif
       return;
     }
-    // NeoPixel support removed
+    
   }
 
 #if LCD_ENABLED
@@ -704,11 +696,7 @@ public:
 
   void refreshLive(Robot &robot);
 
-  // PID menu state
-  int _pidMotor{0};
-  int _pidParam{0};
-  bool _pidCapture{false};
-  String _pidToken{0};
+  // PID menu state removed
 
 private:
 
