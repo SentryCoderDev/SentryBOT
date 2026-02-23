@@ -17,6 +17,10 @@ void NemaController::begin(){
 
 // Map joystick X,Y (-127..127) to left/right stepper speeds (steps/s)
 void NemaController::applyJoystick(int8_t x, int8_t y){
+  if (!_enabled){
+    if (steppers) steppers->setSpeed(0.0f, 0.0f);
+    return;
+  }
   // Normalize to -1..1
   float nx = (float)x / 127.0f;
   float ny = (float)y / 127.0f;
@@ -60,3 +64,16 @@ void NemaController::update(){
   // Always run stepper update so AccelStepper processes ramping
   if (steppers) steppers->update();
 }
+
+void NemaController::setEnabled(bool en){
+  _enabled = en;
+  if (!_enabled && steppers){
+    steppers->setSpeed(0.0f, 0.0f);
+  }
+}
+
+bool NemaController::isEnabled() const { return _enabled; }
+
+bool NemaController::isLeftMotorEnabled() const { return leftEnabled; }
+
+bool NemaController::isRightMotorEnabled() const { return rightEnabled; }
