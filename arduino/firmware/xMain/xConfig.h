@@ -154,6 +154,14 @@ static const uint8_t POSE_SIT[SERVO_COUNT_TOTAL]   = {90,90, 90,90};
 // Peripherals (optional)
 // =====================
 
+// Radio (nRF24 / EBYTE E01) default CE/CSN pins (override if needed)
+#ifndef RADIO_CE_PIN
+#define RADIO_CE_PIN 46
+#endif
+#ifndef RADIO_CSN_PIN
+#define RADIO_CSN_PIN 47
+#endif
+
 // I2C LCD (16x1 büyük font modül; çoğu 16x1 aslında 8x2 adreslemeye sahiptir)
 #ifndef LCD_ENABLED
 #define LCD_ENABLED 1
