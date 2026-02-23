@@ -5,6 +5,8 @@
 #include <EEPROM.h>
 #include "../xConfig.h"
 #include "../xRobot.h"
+#include "../peripherals/xEbyteRadio.h"
+#include "../actuators/xNemaController.h"
 
 #if IR_ENABLED
 
@@ -45,6 +47,8 @@ extern HallEncoder g_hall1;
 extern bool g_lcd1Ok;
 extern uint8_t g_lcdRouteMask;
 #endif
+
+extern EbyteRadio g_ebyteRadio;
 
 class IrMenuController {
 public:
@@ -381,6 +385,20 @@ public:
       return;
     }
 
+    if (_state == STATE_REMOTE){
+      if (k == "OK"){
+        g_nema.setEnabled(!g_nema.isEnabled());
+        emitEvent("remote_ctrl", g_nema.isEnabled() ? 1 : 0);
+        showRemote();
+        return;
+      }
+      if (k == "UP" || k == "DOWN"){
+        showRemote();
+        return;
+      }
+      return;
+    }
+
     // Sensor pages: allow changing subpage on IMU
     if (_state == STATE_IMU){
       if (k == "UP" || k == "DOWN"){
@@ -435,6 +453,12 @@ public:
         refreshLive(robot);
       }
     }
+    if (_state == STATE_REMOTE){
+      if (_lastUiMs == 0 || (_now - _lastUiMs) >= 250UL){
+        _lastUiMs = _now;
+        showRemote();
+      }
+    }
 
     // Non-blocking morse player
     tickMorse();
@@ -449,6 +473,7 @@ public:
     STATE_SERVO_DEG,
     STATE_LASER,
     STATE_SOUND,
+    STATE_REMOTE,
     STATE_ULTRA,
     STATE_IMU,
     STATE_RFID,
@@ -462,6 +487,7 @@ public:
     MENU_IMU,
     MENU_RFID,
     MENU_SOUND,
+    MENU_REMOTE,
     MENU_CALIBRATE,
     MENU_SYSTEM,
     MENU_COUNT,
@@ -520,6 +546,7 @@ public:
       case MENU_IMU: return "IMU";
       case MENU_RFID: return "RFID";
       case MENU_SOUND: return "SOUND";
+      case MENU_REMOTE: return "REMOTE";
       case MENU_CALIBRATE: return "CALIB";
       case MENU_SYSTEM: return "SYSTEM";
       default: return "MENU";
@@ -532,6 +559,18 @@ public:
 
   void showMenu(){
     lcdPrint("MENU", menuName(_menuIndex) + " OK=ENTER");
+  }
+
+  void showRemote(){
+    String status = g_nema.isEnabled() ? "REMOTE ON" : "REMOTE OFF";
+    String src = g_ebyteRadio.lastSource;
+    if (src.length() == 0) src = "PKT:NONE";
+    if (src.length() > 12) src = src.substring(0, 12);
+    String axes = "X" + String(g_ebyteRadio.lastPkt.Rstick_X) + "Y" + String(g_ebyteRadio.lastPkt.Rstick_Y);
+    String bottom = src + " " + axes;
+    if (g_nema.isLeftMotorEnabled()) bottom += " L";
+    if (g_nema.isRightMotorEnabled()) bottom += " R";
+    lcdPrint(status, bottom);
   }
 
 
@@ -581,6 +620,12 @@ public:
         _lastUiMs = 0;
         _soundIndex = 0;
         showSound();
+        return;
+
+      case MENU_REMOTE:
+        _state = STATE_REMOTE;
+        _lastUiMs = 0;
+        showRemote();
         return;
 
       case MENU_CALIBRATE:
