@@ -4,6 +4,7 @@
 #include "xRobot.h"
 #include <EEPROM.h>
 #include "xPeripherals.h"
+#include "actuators/xNemaController.h"
 
 #include "app/xLcdHub.h"
 #include "app/xIrMenuController.h"
@@ -106,6 +107,12 @@ void setup(){
   g_hall1.begin(HALL_PIN_1, 4);
   robot.steppers.attachHallEncoders(&g_hall0, &g_hall1);
 #endif
+  // Initialize EBYTE radio (nRF24L01 compatible) and NEMA controller
+#if defined(RADIO_CE_PIN) && defined(RADIO_CSN_PIN)
+  g_ebyteRadio.begin(RADIO_CE_PIN, RADIO_CSN_PIN, 100);
+#endif
+  // Initialize NEMA controller
+  g_nema.begin();
   // Auto-load IMU offsets if present
   if (EEPROM.read(EEPROM_ADDR_MAGIC)==EEPROM_MAGIC){ float p,r; EEPROM.get(EEPROM_ADDR_IMU_OFF,p); EEPROM.get(EEPROM_ADDR_IMU_OFF+sizeof(float),r); robot.imu.setOffsets(p,r); }
   // Load persisted buzzer frequencies if present
@@ -377,6 +384,9 @@ void loop(){
   if (HEARTBEAT_TIMEOUT_MS>0 && (millis() - lastHeartbeatMs > HEARTBEAT_TIMEOUT_MS)){
     robot.estop();
   }
+  // Poll radio and update NEMA controller
+  g_ebyteRadio.poll();
+  g_nema.update();
   // Telemetry periodic output
   if (telemetryOn && millis() - lastTelemetryMs >= telemetryInterval){
     lastTelemetryMs = millis(); robot.imu.read();

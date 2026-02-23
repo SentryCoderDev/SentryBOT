@@ -17,4 +17,8 @@ extern class OledDisplay g_oled;
 #endif
 #include "peripherals/logo_Ads_z.h"
 #include "peripherals/xIrKeyReader.h"
+#include "peripherals/xEbyteRadio.h"
+
+// Ebyte radio instance (nRF24L01 compatible)
+extern EbyteRadio g_ebyteRadio;
 #endif // ROBOT_PERIPHERALS_H
