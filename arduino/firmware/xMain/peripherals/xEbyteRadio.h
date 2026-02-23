@@ -30,8 +30,8 @@ public:
 private:
   RF24* radio;
   uint8_t _ce, _csn;
-  const uint8_t masterAddr[6] = "UST01"; // ESP master address
-  const uint8_t slaveAddr[6]  = "ALT01"; // our address
+  const uint8_t masterAddr[6] = { 'U','S','T','0','1','\0' }; // ESP master address
+  const uint8_t slaveAddr[6]  = { 'A','L','T','0','1','\0' }; // our address
   // CRC helper
   static uint16_t crc16(const uint8_t *data, size_t len);
 };
