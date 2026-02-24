@@ -84,4 +84,46 @@ def get_router(svc: xArduinoSerialService) -> APIRouter:
         except Exception as e:
             return {"ok": False, "error": str(e)}
 
+    @r.post("/cute/{name}")
+    def cute(name: str):
+        try:
+            return svc.cute(name)
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    @r.post("/sound/out/{mode}")
+    def sound_out(mode: str):
+        try:
+            return svc.sound_output(mode)
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    @r.post("/buzzer")
+    def buzzer(freq: int = 2200, ms: int = 60, out: Optional[str] = None):
+        try:
+            return svc.buzzer(freq=freq, ms=ms, out=out)
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    @r.post("/sound/play/{name}")
+    def sound_play(name: str, out: Optional[str] = None):
+        try:
+            return svc.sound_play(name=name, out=out)
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    @r.get("/cute/catalog")
+    def cute_catalog():
+        try:
+            return svc.get_cute_catalog()
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    @r.post("/cute/emotion/{emotion}")
+    def cute_emotion(emotion: str):
+        try:
+            return svc.play_emotion(emotion)
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
     return r
