@@ -10,9 +10,12 @@
 #include "app/xLcdHub.h"
 #include "app/xIrMenuController.h"
 #include "app/xCommands.h"
+#include "app/xCuteBuzzer.h"
 
 Robot robot;
 unsigned long lastHeartbeatMs = 0;
+bool g_linkAlive = false;
+bool g_linkEverAlive = false;
 bool telemetryOn = false;
 unsigned long telemetryInterval = 100;
 unsigned long lastTelemetryMs = 0;
@@ -226,6 +229,7 @@ void setup(){
   g_buzzer.begin(BUZZER_LOUD_PIN, BUZZER_QUIET_PIN);
   g_song.begin(&g_buzzer);
   g_song.setDefaultOut(g_buzzerDefaultOut);
+  cuteBuzzerInit();
 #if BOOT_BEEP
   // Boot beep uses LOUD at test freq
   g_buzzer.beepOn(BUZZER_OUT_LOUD, g_buzzerFreqLoud, 50);
@@ -289,10 +293,7 @@ void loop(){
               g_lastOwnerRfidMs = now;
         // Greet owner on LCD1
         g_lcdStatus.showTo(LCD_TGT_1, "Merhaba", "Sahip", true);
-        // Audible acknowledgement (short beep)
-      #if BUZZER_ENABLED
-        g_buzzer.beepOn(BUZZER_OUT_LOUD, g_buzzerFreqLoud, 200);
-      #endif
+        playCuteSound(CUTE_SUPER_HAPPY, true);
         // Enqueue sequence: walle then three bb8 variants
         enqueueSong("walle");
         enqueueSong("bb8_1");
@@ -382,6 +383,17 @@ void loop(){
 #endif
   
   // Heartbeat timeout safety
+  if (HEARTBEAT_TIMEOUT_MS > 0){
+    bool linkNow = (millis() - lastHeartbeatMs) <= HEARTBEAT_TIMEOUT_MS;
+    if (linkNow && !g_linkAlive){
+      g_linkAlive = true;
+      g_linkEverAlive = true;
+      playCuteSound(CUTE_CONNECTION, true);
+    } else if (!linkNow && g_linkAlive && g_linkEverAlive){
+      g_linkAlive = false;
+      playCuteSound(CUTE_DISCONNECTION, true);
+    }
+  }
   if (HEARTBEAT_TIMEOUT_MS>0 && (millis() - lastHeartbeatMs > HEARTBEAT_TIMEOUT_MS)){
     robot.estop();
   }

@@ -6,6 +6,7 @@
 #include "../xProtocol.h"
 #include "../xRobot.h"
 #include "xIrMenuController.h"
+#include "xCuteBuzzer.h"
 
 // Globals owned by xMain.ino
 extern Robot robot;
@@ -153,12 +154,14 @@ static inline void handleJson(const String &line){
     if (line.indexOf("\"out\":\"loud\"")>=0 || line.indexOf("\"mode\":\"loud\"")>=0){
       g_buzzerDefaultOut = BUZZER_OUT_LOUD;
       g_song.setDefaultOut(g_buzzerDefaultOut);
+      cuteBuzzerInit();
       Protocol::sendOk("sound_out_loud");
       return;
     }
     if (line.indexOf("\"out\":\"quiet\"")>=0 || line.indexOf("\"mode\":\"quiet\"")>=0){
       g_buzzerDefaultOut = BUZZER_OUT_QUIET;
       g_song.setDefaultOut(g_buzzerDefaultOut);
+      cuteBuzzerInit();
       Protocol::sendOk("sound_out_quiet");
       return;
     }
@@ -237,6 +240,21 @@ static inline void handleJson(const String &line){
     if (pat.length()==0){ Protocol::sendErr("bad_text"); return; }
     g_irMenu.startMorse(pat);
     Protocol::sendOk("speech_playing");
+    return;
+  }
+
+  if (line.indexOf("\"cmd\":\"cute\"")>=0){
+#if BUZZER_ENABLED
+    int p=line.indexOf("\"name\":\"");
+    String name = "";
+    if (p>=0){ int e=line.indexOf('"', p+8); if (e>p) name = line.substring(p+8, e); }
+    if (name.length()==0){ Protocol::sendErr("no_name"); return; }
+    bool ok = playCuteSoundByName(name, true);
+    if (ok) Protocol::sendOk("cute_played");
+    else Protocol::sendErr("unknown_cute_name");
+#else
+    Protocol::sendErr("buzzer_disabled");
+#endif
     return;
   }
 
