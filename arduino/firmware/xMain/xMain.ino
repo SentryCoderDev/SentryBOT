@@ -4,8 +4,7 @@
 #include "xRobot.h"
 #include <EEPROM.h>
 #include "xPeripherals.h"
-#include "peripherals/xEbyteRadio.cpp"
-#include "actuators/xNemaController.cpp"
+#include "peripherals/xEbyteRadio.h"
 #include "actuators/xNemaController.h"
 
 #include "app/xLcdHub.h"
