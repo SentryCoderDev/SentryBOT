@@ -9,6 +9,10 @@
 // SOUND / MORSE implementations moved out for readability
 
 String IrMenuController::soundName(uint8_t idx){
+  if (idx >= SOUND_CUTE_CONNECTION && idx <= SOUND_CUTE_JUMP){
+    CuteSoundKey key = (CuteSoundKey)(idx - SOUND_CUTE_CONNECTION);
+    return String(cuteMenuLabel(key));
+  }
   switch ((SoundItem)idx){
     case SOUND_WALLE: return "WALLE";
     case SOUND_BB8: return "BB8";
@@ -57,6 +61,11 @@ void IrMenuController::playSelectedSound(){
   if ((SoundItem)_soundIndex == SOUND_MORSE){
     _morseMode = !_morseMode;
     if (_morseMode) lcdPrint("MORSE", "KEY=CODE #=BK");
+    return;
+  }
+  if (_soundIndex >= SOUND_CUTE_CONNECTION && _soundIndex <= SOUND_CUTE_JUMP){
+    CuteSoundKey key = (CuteSoundKey)(_soundIndex - SOUND_CUTE_CONNECTION);
+    playCuteSound(key, true);
     return;
   }
   if ((SoundItem)_soundIndex == SOUND_BUZZER){

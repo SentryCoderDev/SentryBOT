@@ -7,6 +7,7 @@
 #include "../xRobot.h"
 #include "../peripherals/xEbyteRadio.h"
 #include "../actuators/xNemaController.h"
+#include "xCuteBuzzer.h"
 
 #if IR_ENABLED
 
@@ -496,6 +497,26 @@ public:
   enum SoundItem : uint8_t {
     SOUND_WALLE = 0,
     SOUND_BB8,
+    SOUND_CUTE_CONNECTION,
+    SOUND_CUTE_DISCONNECT,
+    SOUND_CUTE_BUTTON,
+    SOUND_CUTE_MODE1,
+    SOUND_CUTE_MODE2,
+    SOUND_CUTE_MODE3,
+    SOUND_CUTE_HAPPY,
+    SOUND_CUTE_HAPPY_SHORT,
+    SOUND_CUTE_SUPER_HAPPY,
+    SOUND_CUTE_SAD,
+    SOUND_CUTE_SURPRISE,
+    SOUND_CUTE_OHOOH,
+    SOUND_CUTE_OHOOH2,
+    SOUND_CUTE_CUDDLY,
+    SOUND_CUTE_CONFUSED,
+    SOUND_CUTE_SLEEPING,
+    SOUND_CUTE_FART1,
+    SOUND_CUTE_FART2,
+    SOUND_CUTE_FART3,
+    SOUND_CUTE_JUMP,
     SOUND_MORSE,
     SOUND_BUZZER,
     SOUND_BUZZER_SETTINGS,
