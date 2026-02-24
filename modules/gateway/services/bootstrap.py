@@ -312,4 +312,34 @@ def bootstrap(app: FastAPI, cfg: Dict[str, Any]) -> Dict[str, object]:
         )), "config_center")
         started["config_center"] = True
 
+    arduino = started.get("arduino")
+    neopixel = started.get("neopixel")
+    if arduino is not None and neopixel is not None and hasattr(arduino, "register_event_handler"):
+        def _on_arduino_event(msg: Dict[str, Any]) -> None:
+            if not isinstance(msg, dict):
+                return
+            if msg.get("event") != "neopixel_request":
+                return
+            try:
+                name = str(msg.get("name", "")).strip()
+                iterations = int(msg.get("iterations", 1) or 1)
+                color = None
+                if isinstance(msg.get("color"), str):
+                    parts = [p.strip() for p in str(msg.get("color")).split(",")]
+                    if len(parts) == 3:
+                        color = (int(parts[0]) & 255, int(parts[1]) & 255, int(parts[2]) & 255)
+                if name:
+                    neopixel.animate(name=name, iterations=iterations, color=color)
+                    return
+                if color is not None:
+                    neopixel.fill(*color)
+            except Exception as exc:
+                logger.debug("neopixel request handling failed: %s", exc)
+
+        try:
+            arduino.register_event_handler(_on_arduino_event)
+            logger.info("arduino->neopixel event bridge mounted")
+        except Exception as exc:
+            logger.warning("arduino->neopixel bridge mount failed: %s", exc)
+
     return started

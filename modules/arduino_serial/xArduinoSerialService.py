@@ -4,6 +4,7 @@ import json
 import threading
 import time
 import os
+import logging
 from queue import Queue, Empty
 from typing import Any, Dict, Optional, Callable, List
 
@@ -50,7 +51,42 @@ class xArduinoSerialService:
     - Arkaplanda okuma thread'i ve opsiyonel heartbeat vardır.
     """
 
+    CUTE_SOUND_CATALOG: Dict[str, Dict[str, Any]] = {
+        "connection": {"animation": "PULSE", "color": "0,180,80", "iterations": 1},
+        "disconnection": {"animation": "THEATER_CHASE", "color": "220,30,30", "iterations": 1},
+        "button_pushed": {"animation": "PULSE", "color": "180,180,180", "iterations": 1},
+        "mode1": {"animation": "WAVE", "color": "0,180,255", "iterations": 1},
+        "mode2": {"animation": "WAVE", "color": "180,0,255", "iterations": 1},
+        "mode3": {"animation": "WAVE", "color": "255,80,0", "iterations": 1},
+        "happy": {"animation": "WAVE", "color": "255,220,0", "iterations": 2},
+        "happy_short": {"animation": "PULSE", "color": "255,220,0", "iterations": 1},
+        "super_happy": {"animation": "RAINBOW", "color": "", "iterations": 1},
+        "sad": {"animation": "BREATHE", "color": "0,70,255", "iterations": 2},
+        "surprise": {"animation": "TWINKLE", "color": "255,255,255", "iterations": 2},
+        "ohooh": {"animation": "THEATER_CHASE", "color": "255,255,255", "iterations": 1},
+        "ohooh2": {"animation": "THEATER_CHASE", "color": "255,255,255", "iterations": 2},
+        "cuddly": {"animation": "BREATHE", "color": "255,50,150", "iterations": 2},
+        "confused": {"animation": "PULSE", "color": "170,0,255", "iterations": 2},
+        "sleeping": {"animation": "BREATHE", "color": "20,40,120", "iterations": 2},
+        "fart1": {"animation": "ALTERNATING", "color": "20,180,20", "iterations": 2},
+        "fart2": {"animation": "ALTERNATING", "color": "40,220,40", "iterations": 2},
+        "fart3": {"animation": "ALTERNATING", "color": "10,120,10", "iterations": 2},
+        "jump": {"animation": "COMET", "color": "255,255,255", "iterations": 2},
+    }
+
+    EMOTION_TO_CUTE: Dict[str, str] = {
+        "happy": "happy",
+        "super_happy": "super_happy",
+        "sad": "sad",
+        "surprise": "surprise",
+        "confused": "confused",
+        "sleeping": "sleeping",
+        "connected": "connection",
+        "disconnected": "disconnection",
+    }
+
     def __init__(self, config_overrides: Optional[Dict[str, Any]] = None, transport_factory: Optional[Callable[..., Any]] = None):
+        self._logger = logging.getLogger("arduino_serial.service")
         self.cfg = load_config(base_dir=None, overrides=config_overrides)
         self.transport_factory = transport_factory or (lambda port, baudrate, timeout, write_timeout: SerialTransport(port, baudrate, timeout, write_timeout))
         self._ser: Optional[SerialTransport] = None
@@ -62,6 +98,7 @@ class xArduinoSerialService:
         self._rfid_lock = threading.Lock()
         self._last_rfid: Optional[tuple[str, float]] = None
         self._saw_boot_ready = False  # drop one-time boot line from request matching
+        self._event_handlers: List[Callable[[Dict[str, Any]], None]] = []
 
     # -------- lifecycle --------
     def start(self) -> None:
@@ -125,6 +162,11 @@ class xArduinoSerialService:
             return self._rx_queue.get(timeout=timeout)
         except Empty:
             return None
+
+    def register_event_handler(self, handler: Callable[[Dict[str, Any]], None]) -> None:
+        if handler is None:
+            return
+        self._event_handlers.append(handler)
 
     # High-level helpers matching firmware
     def hello(self) -> Dict[str, Any]:
@@ -255,6 +297,51 @@ class xArduinoSerialService:
     def laser_off(self) -> Dict[str, Any]:
         return self.request({"cmd": "laser", "on": False})
 
+    # -------- sound controls --------
+    def cute(self, name: str) -> Dict[str, Any]:
+        return self.request({"cmd": "cute", "name": str(name)})
+
+    def sound_output(self, mode: str) -> Dict[str, Any]:
+        mode_low = str(mode).strip().lower()
+        if mode_low not in ("loud", "quiet"):
+            raise ValueError("mode must be loud or quiet")
+        return self.request({"cmd": "sound", "out": mode_low})
+
+    def buzzer(self, freq: int = 2200, ms: int = 60, out: Optional[str] = None) -> Dict[str, Any]:
+        payload: Dict[str, Any] = {"cmd": "buzzer", "freq": int(freq), "ms": int(ms)}
+        if out is not None:
+            out_low = str(out).strip().lower()
+            if out_low not in ("loud", "quiet"):
+                raise ValueError("out must be loud or quiet")
+            payload["out"] = out_low
+        return self.request(payload)
+
+    def sound_play(self, name: str, out: Optional[str] = None) -> Dict[str, Any]:
+        payload: Dict[str, Any] = {"cmd": "sound_play", "name": str(name)}
+        if out is not None:
+            out_low = str(out).strip().lower()
+            if out_low not in ("loud", "quiet"):
+                raise ValueError("out must be loud or quiet")
+            payload["out"] = out_low
+        return self.request(payload)
+
+    def get_cute_catalog(self) -> Dict[str, Any]:
+        return {
+            "ok": True,
+            "sounds": [
+                {"name": name, **cfg}
+                for name, cfg in self.CUTE_SOUND_CATALOG.items()
+            ],
+            "emotion_map": self.EMOTION_TO_CUTE,
+        }
+
+    def play_emotion(self, emotion: str) -> Dict[str, Any]:
+        key = str(emotion).strip().lower()
+        sound = self.EMOTION_TO_CUTE.get(key)
+        if not sound:
+            raise ValueError(f"unknown emotion: {emotion}")
+        return self.cute(sound)
+
     # -------- internals --------
     def _connect(self) -> None:
         port = self._autodetect_port(self.cfg["port"]) if self.cfg.get("port") in (None, "auto", "AUTO") else self.cfg["port"]
@@ -373,9 +460,15 @@ class xArduinoSerialService:
     def _ingest_message(self, msg: Any) -> None:
         if not isinstance(msg, dict):
             return
-        if msg.get("event") == "rfid":
+        event_name = msg.get("event")
+        if event_name == "rfid":
             self._record_rfid(msg.get("uid"))
-            return
+        if event_name:
+            for handler in list(self._event_handlers):
+                try:
+                    handler(msg)
+                except Exception as exc:
+                    self._logger.debug("event handler failed: %s", exc)
         if msg.get("telemetry") and msg.get("rfid"):
             self._record_rfid(msg.get("rfid"))
 
