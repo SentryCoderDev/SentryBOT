@@ -1,6 +1,6 @@
-#include "xEbyteRadio.h"
-#include "../xConfig.h"
-#include "xLcdDisplay.h"
+#include "peripherals/xEbyteRadio.h"
+#include "xConfig.h"
+#include "peripherals/xLcdDisplay.h"
 
 #include <SPI.h>
 
@@ -35,23 +35,18 @@ void EbyteRadio::poll(){
   // 1) Legacy: raw MasterPacket1 (5 bytes)
   // 2) Framed: [seq:1][payload:MasterPacket1][crc16:2] => total 8 bytes
   if (size == sizeof(MasterPacket1)){
-    // Legacy packet (no seq, no crc)
     radio->read(&lastPkt, size);
     lastSource = "RF_EBYTE";
     newPacket = true;
-    // Send lightweight ACK with seq=0 indicating legacy
     sendAck(0, lastPkt, 0);
     String s = String("pkt R(Legacy): X=") + lastPkt.Rstick_X + ",Y=" + lastPkt.Rstick_Y + ",B=0x" + String(lastPkt.Buttons, HEX);
     SERIAL_IO.println(s);
   } else if (size == (1 + sizeof(MasterPacket1) + 2)){
-    // Framed packet with seq + payload + crc
     uint8_t buf[1 + sizeof(MasterPacket1) + 2];
     radio->read(buf, sizeof(buf));
     uint8_t seq = buf[0];
-    // payload copy
     memcpy(&lastPkt, buf + 1, sizeof(MasterPacket1));
     uint16_t rxCrc = (uint16_t)buf[1 + sizeof(MasterPacket1)] | ((uint16_t)buf[1 + sizeof(MasterPacket1) + 1] << 8);
-    // compute crc over seq + payload
     uint16_t calc = crc16(buf, 1 + sizeof(MasterPacket1));
     if (calc == rxCrc){
       lastSource = String("RF_EBYTE") + "#" + String(seq);
@@ -60,17 +55,14 @@ void EbyteRadio::poll(){
       String s = String("pkt R(Framed): seq=") + seq + " X=" + lastPkt.Rstick_X + ",Y=" + lastPkt.Rstick_Y + ",B=0x" + String(lastPkt.Buttons, HEX);
       SERIAL_IO.println(s);
     } else {
-      // CRC mismatch — request NACK (status=1)
       sendAck(seq, lastPkt, 1);
       SERIAL_IO.println(F("pkt R: CRC FAIL"));
     }
   } else {
-    // Unknown frame size — flush
     radio->flush_rx();
   }
 }
 
-// ACK packet format: [ack_seq:1][rx_X:1][rx_Y:1][status:1][crc16:2]
 void EbyteRadio::sendAck(uint8_t seq, const MasterPacket1 &echo, uint8_t status){
   if (!radio) return;
   uint8_t out[1+1+1+1+2];
@@ -82,14 +74,12 @@ void EbyteRadio::sendAck(uint8_t seq, const MasterPacket1 &echo, uint8_t status)
   out[4] = (uint8_t)(crc & 0xFF);
   out[5] = (uint8_t)((crc >> 8) & 0xFF);
 
-  // send ACK (temporarily stop listening)
   radio->stopListening();
   bool ok = radio->write(out, sizeof(out));
   if (!ok){ SERIAL_IO.println(F("EbyteRadio: ACK send failed")); }
   radio->startListening();
 }
 
-// CRC-16/CCITT-FALSE (0x1021 init 0xFFFF)
 uint16_t EbyteRadio::crc16(const uint8_t *data, size_t len){
   uint16_t crc = 0xFFFF;
   for (size_t i = 0; i < len; ++i){
