@@ -415,4 +415,6 @@ void loop(){
       out += "}";
       SERIAL_IO.println(out);
   }
+  // periodic maintenance for neopixel request retries/acks
+  neopixelTick();
 }
