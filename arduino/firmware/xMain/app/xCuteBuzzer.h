@@ -50,16 +50,54 @@ extern uint16_t g_buzzerFreqQuiet;
 #define SENTRY_CUTE_BUZZER_LIB 0
 #endif
 
+// Forward declarations for inline helpers (declared later in this header)
+static inline void enqueueNeopixelPending(uint16_t seq, const String &payload);
+static inline void markNeopixelAck(uint16_t seq);
+static inline void neopixelTick();
+
 static inline void emitNeopixelRequest(const String &name, const String &color = "", int iterations = 1){
-  String evt = String("{\"ok\":true,\"event\":\"neopixel_request\",\"name\":\"") + Protocol::escape(name) + "\"";
-  if (color.length() > 0){
-    evt += String(",\"color\":\"") + Protocol::escape(color) + "\"";
+  // Validate iterations and color to avoid malformed or harmful values
+  const int MAX_ITER = 10;
+  if (iterations < 1) iterations = 1;
+  if (iterations > MAX_ITER) iterations = MAX_ITER;
+  // basic color format check: either empty or R,G,B where 0<=x<=255
+  auto isValidColor = [](const String &c)->bool{
+    if (c.length()==0) return true;
+    int parts = 0; int last = 0;
+    for (int i=0;i<=c.length();++i){
+      if (i==c.length() || c[i]==','){
+        String tok = c.substring(last, i);
+        tok.trim();
+        if (tok.length()==0) return false;
+        int v = tok.toInt();
+        if (v < 0 || v > 255) return false;
+        parts++; last = i+1;
+      }
+    }
+    return parts==3;
+  };
+
+  if (!isValidColor(color)){
+    // If invalid color, clear it so Pi uses default behavior
   }
-  if (iterations > 0){
-    evt += String(",\"iterations\":") + String(iterations);
+
+  // Build payload once and enqueue for retry management (seq assigned by helper)
+  static uint16_t g_neopixel_seq = 1;
+  uint16_t seq = g_neopixel_seq++;
+  if (g_neopixel_seq == 0) g_neopixel_seq = 1; // avoid zero
+
+  String payload = String("{\"ok\":true,\"event\":\"neopixel_request\",\"name\":\"") + Protocol::escape(name) + "\"";
+  if (color.length()>0 && isValidColor(color)){
+    payload += String(",\"color\":\"") + Protocol::escape(color) + "\"";
   }
-  evt += "}";
-  SERIAL_IO.println(evt);
+  payload += String(",\"iterations\":") + String(iterations);
+  payload += String(",\"seq\":") + String(seq);
+  payload += "}";
+
+  // Enqueue pending payload for the retry engine (inline implementation below)
+  enqueueNeopixelPending(seq, payload);
+
+  SERIAL_IO.println(payload);
 }
 
 static inline void emitCutePlayed(const String &name){
@@ -72,6 +110,22 @@ static inline uint8_t activeBuzzerPin(){
 }
 
 static inline const char* cuteName(CuteSoundKey key){
+  // Use PROGMEM on AVR to save RAM
+#if defined(ARDUINO_ARCH_AVR)
+  static const char names[][16] PROGMEM = {
+    "connection","disconnection","button_pushed","mode1",
+    "mode2","mode3","happy","happy_short",
+    "super_happy","sad","surprise","ohooh",
+    "ohooh2","cuddly","confused","sleeping",
+    "fart1","fart2","fart3","jump"
+  };
+  static char buf[24];
+  if ((int)key >= 0 && (int)key < 20){
+    strcpy_P(buf, (PGM_P)names[key]);
+    return buf;
+  }
+  return "unknown";
+#else
   switch (key){
     case CUTE_CONNECTION: return "connection";
     case CUTE_DISCONNECTION: return "disconnection";
@@ -95,9 +149,26 @@ static inline const char* cuteName(CuteSoundKey key){
     case CUTE_JUMP: return "jump";
     default: return "unknown";
   }
+#endif
 }
 
 static inline const char* cuteMenuLabel(CuteSoundKey key){
+  // Use PROGMEM for menu labels on AVR
+#if defined(ARDUINO_ARCH_AVR)
+  static const char labels[][16] PROGMEM = {
+    "CUTE CONNECT","CUTE DISCON","CUTE BUTTON","CUTE MODE1",
+    "CUTE MODE2","CUTE MODE3","CUTE HAPPY","CUTE H-SHORT",
+    "CUTE S-HAPPY","CUTE SAD","CUTE SURPRISE","CUTE OHOOH",
+    "CUTE OHOOH2","CUTE CUDDLY","CUTE CONFUSE","CUTE SLEEP",
+    "CUTE FART1","CUTE FART2","CUTE FART3","CUTE JUMP"
+  };
+  static char buf2[20];
+  if ((int)key >= 0 && (int)key < 20){
+    strcpy_P(buf2, (PGM_P)labels[key]);
+    return buf2;
+  }
+  return "CUTE";
+#else
   switch (key){
     case CUTE_CONNECTION: return "CUTE CONNECT";
     case CUTE_DISCONNECTION: return "CUTE DISCON";
@@ -121,6 +192,7 @@ static inline const char* cuteMenuLabel(CuteSoundKey key){
     case CUTE_JUMP: return "CUTE JUMP";
     default: return "CUTE";
   }
+#endif
 }
 
 static inline void cuteNeopixelFor(CuteSoundKey key){
@@ -158,7 +230,6 @@ static inline void cuteBuzzerInit(){
 static inline void playCuteSound(CuteSoundKey key, bool emitNeopixel = true){
   const char *name = cuteName(key);
 #if SENTRY_CUTE_BUZZER_LIB
-  cute.init(activeBuzzerPin());
   switch (key){
     case CUTE_CONNECTION: cute.play(S_CONNECTION); break;
     case CUTE_DISCONNECTION: cute.play(S_DISCONNECTION); break;
@@ -210,6 +281,63 @@ static inline void playCuteSound(CuteSoundKey key, bool emitNeopixel = true){
 #endif
   emitCutePlayed(String(name));
   if (emitNeopixel) cuteNeopixelFor(key);
+}
+
+// Mark a pending neopixel seq as acknowledged by Pi
+// Retry/ack helpers implemented inline to ensure availability during AVR link
+static const int _CUTE_PENDING_MAX = 6;
+struct _CutePendingItem { uint16_t seq; String payload; uint8_t retries; unsigned long lastMs; bool done; };
+static _CutePendingItem _g_cute_pending[_CUTE_PENDING_MAX] = {};
+
+static inline void enqueueNeopixelPending(uint16_t seq, const String &payload){
+  for (int i=0;i<_CUTE_PENDING_MAX;i++){
+    if (_g_cute_pending[i].done || _g_cute_pending[i].seq==0){
+      _g_cute_pending[i].seq = seq;
+      _g_cute_pending[i].payload = payload;
+      _g_cute_pending[i].retries = 0;
+      _g_cute_pending[i].lastMs = millis();
+      _g_cute_pending[i].done = false;
+      return;
+    }
+  }
+  int oldest = 0; unsigned long oldestMs = _g_cute_pending[0].lastMs;
+  for (int i=1;i<_CUTE_PENDING_MAX;i++) if (_g_cute_pending[i].lastMs < oldestMs){ oldest = i; oldestMs = _g_cute_pending[i].lastMs; }
+  _g_cute_pending[oldest].seq = seq;
+  _g_cute_pending[oldest].payload = payload;
+  _g_cute_pending[oldest].retries = 0;
+  _g_cute_pending[oldest].lastMs = millis();
+  _g_cute_pending[oldest].done = false;
+}
+
+static inline void markNeopixelAck(uint16_t seq){
+  if (seq==0) return;
+  for (int i=0;i<_CUTE_PENDING_MAX;i++){
+    if (!_g_cute_pending[i].done && _g_cute_pending[i].seq == seq){
+      _g_cute_pending[i].done = true;
+      _g_cute_pending[i].seq = 0;
+      _g_cute_pending[i].payload = String("");
+      _g_cute_pending[i].retries = 0;
+      _g_cute_pending[i].lastMs = 0;
+      return;
+    }
+  }
+}
+
+static inline void neopixelTick(){
+  const uint8_t MAX_RETRIES = 3;
+  const unsigned long RETRY_MS = 600UL;
+  unsigned long now = millis();
+  for (int i=0;i<_CUTE_PENDING_MAX;i++){
+    if (_g_cute_pending[i].done || _g_cute_pending[i].seq==0) continue;
+    unsigned long elapsed = (now - _g_cute_pending[i].lastMs);
+    if (_g_cute_pending[i].retries < MAX_RETRIES && elapsed >= RETRY_MS * (_g_cute_pending[i].retries + 1)){
+      SERIAL_IO.println(_g_cute_pending[i].payload);
+      _g_cute_pending[i].retries++;
+      _g_cute_pending[i].lastMs = now;
+    } else if (_g_cute_pending[i].retries >= MAX_RETRIES){
+      _g_cute_pending[i].done = true;
+    }
+  }
 }
 
 static inline bool playCuteSoundByName(const String &name, bool emitNeopixel = true){
