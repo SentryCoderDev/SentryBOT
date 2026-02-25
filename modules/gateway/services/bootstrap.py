@@ -315,30 +315,65 @@ def bootstrap(app: FastAPI, cfg: Dict[str, Any]) -> Dict[str, object]:
     arduino = started.get("arduino")
     neopixel = started.get("neopixel")
     if arduino is not None and neopixel is not None and hasattr(arduino, "register_event_handler"):
+        # rate-limited queue to prevent NeoPixel overload from Arduino bursts
+        import threading
+        _np_lock = threading.Lock()
+        _np_queue: list[Dict[str, Any]] = []
+        _np_last_ms = 0
+        _np_min_interval_ms = int(cfg.get("neopixel", {}).get("min_interval_ms", 100))
+        _np_max_queue = int(cfg.get("neopixel", {}).get("max_queue", 32))
+
+        def _enqueue_np(req: Dict[str, Any]) -> None:
+            nonlocal _np_queue
+            with _np_lock:
+                if len(_np_queue) >= _np_max_queue:
+                    # drop oldest to make room
+                    _np_queue.pop(0)
+                _np_queue.append(req)
+
+        def _flush_queue() -> None:
+            nonlocal _np_last_ms
+            now_ms = int(__import__("time").time() * 1000)
+            with _np_lock:
+                if not _np_queue:
+                    return
+                if now_ms - _np_last_ms < _np_min_interval_ms:
+                    return
+                req = _np_queue.pop(0)
+            try:
+                name = str(req.get("name", "")).strip()
+                iterations = int(req.get("iterations", 1) or 1)
+                # clamp iterations
+                if iterations < 1: iterations = 1
+                if iterations > 10: iterations = 10
+                color = None
+                if isinstance(req.get("color"), str):
+                    parts = [p.strip() for p in str(req.get("color")).split(",")]
+                    if len(parts) == 3:
+                        color = (int(parts[0]) & 255, int(parts[1]) & 255, int(parts[2]) & 255)
+                if name:
+                    neopixel.animate(name=name, iterations=iterations, color=color)
+                elif color is not None:
+                    neopixel.fill(*color)
+            except Exception as exc:
+                logger.debug("neopixel request handling failed during flush: %s", exc)
+            _np_last_ms = int(__import__("time").time() * 1000)
+
         def _on_arduino_event(msg: Dict[str, Any]) -> None:
             if not isinstance(msg, dict):
                 return
             if msg.get("event") != "neopixel_request":
                 return
             try:
-                name = str(msg.get("name", "")).strip()
-                iterations = int(msg.get("iterations", 1) or 1)
-                color = None
-                if isinstance(msg.get("color"), str):
-                    parts = [p.strip() for p in str(msg.get("color")).split(",")]
-                    if len(parts) == 3:
-                        color = (int(parts[0]) & 255, int(parts[1]) & 255, int(parts[2]) & 255)
-                if name:
-                    neopixel.animate(name=name, iterations=iterations, color=color)
-                    return
-                if color is not None:
-                    neopixel.fill(*color)
+                # enqueue and attempt a flush
+                _enqueue_np(msg)
+                _flush_queue()
             except Exception as exc:
                 logger.debug("neopixel request handling failed: %s", exc)
 
         try:
             arduino.register_event_handler(_on_arduino_event)
-            logger.info("arduino->neopixel event bridge mounted")
+            logger.info("arduino->neopixel event bridge mounted (rate-limited)")
         except Exception as exc:
             logger.warning("arduino->neopixel bridge mount failed: %s", exc)
 
