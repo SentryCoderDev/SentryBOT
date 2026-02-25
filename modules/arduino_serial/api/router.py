@@ -119,6 +119,13 @@ def get_router(svc: xArduinoSerialService) -> APIRouter:
         except Exception as e:
             return {"ok": False, "error": str(e)}
 
+    @r.get("/metrics")
+    def metrics():
+        try:
+            return svc._metrics
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
     @r.post("/cute/emotion/{emotion}")
     def cute_emotion(emotion: str):
         try:
