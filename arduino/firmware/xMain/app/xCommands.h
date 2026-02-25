@@ -57,6 +57,13 @@ extern BuzzerOut g_buzzerDefaultOut;
 #endif
 
 static inline void handleJson(const String &line){
+  // Handle ACKs for neopixel requests (from Pi): {"ok":true,"ack_seq":<num>}
+  int _ackp = line.indexOf("\"ack_seq\":");
+  if (_ackp >= 0){
+    int sval = line.substring(_ackp+10).toInt();
+    if (sval > 0) markNeopixelAck((uint16_t)sval);
+    // continue processing other commands
+  }
   // Very small manual parse for known keys to avoid heavy JSON libs on AVR
   if (line.indexOf("\"cmd\":\"hello\"")>=0){ Protocol::sendOk("hello"); return; }
   if (line.indexOf("\"cmd\":\"hb\"")>=0){ lastHeartbeatMs = millis(); Protocol::sendOk("hb"); return; }
@@ -188,10 +195,16 @@ static inline void handleJson(const String &line){
     int p=line.indexOf("\"freq\":");
     int freq=2200;
     if(p>=0) freq=line.substring(p+7).toInt();
+    // clamp safe frequency range
+    if (freq < 200) freq = 200;
+    if (freq > 4000) freq = 4000;
 
     p=line.indexOf("\"ms\":");
     int ms=60;
     if(p>=0) ms=line.substring(p+5).toInt();
+    // clamp duration
+    if (ms < 1) ms = 1;
+    if (ms > 60000) ms = 60000;
 
     BuzzerOut out = g_buzzerDefaultOut;
     if (line.indexOf("\"out\":\"loud\"")>=0) out = BUZZER_OUT_LOUD;
