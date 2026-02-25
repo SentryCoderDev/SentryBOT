@@ -9,6 +9,8 @@ from queue import Queue, Empty
 from typing import Any, Dict, Optional, Callable, List
 
 from .config_loader import load_config
+import json as _json
+import pathlib as _pathlib
 
 try:
     import serial  # type: ignore
@@ -99,6 +101,21 @@ class xArduinoSerialService:
         self._last_rfid: Optional[tuple[str, float]] = None
         self._saw_boot_ready = False  # drop one-time boot line from request matching
         self._event_handlers: List[Callable[[Dict[str, Any]], None]] = []
+        # metrics
+        self._metrics = {"rx_count": 0, "tx_count": 0, "acks_sent": 0}
+        # try load external cute mapping
+        try:
+            mfile = _pathlib.Path(__file__).parent / "config" / "cute_mapping.json"
+            if mfile.exists():
+                with open(mfile, "r", encoding="utf-8") as fh:
+                    self.CUTE_SOUND_CATALOG = _json.load(fh)
+        except Exception:
+            pass
+
+        # outgoing writer queue and thread
+        self._write_queue: "Queue[bytes]" = Queue()
+        self._writer_thread = threading.Thread(target=self._writer_loop, name="arduino-writer", daemon=True)
+        self._writer_thread.start()
 
     # -------- lifecycle --------
     def start(self) -> None:
@@ -123,9 +140,10 @@ class xArduinoSerialService:
     # -------- public api --------
     def send(self, obj: Dict[str, Any]) -> None:
         line = (json.dumps(obj, separators=(",", ":")) + "\n").encode("utf-8")
+        # enqueue for writer thread to avoid blocking caller
         self._ensure_connected()
-        assert self._ser is not None
-        self._ser.write(line)
+        self._write_queue.put(line)
+        self._metrics["tx_count"] += 1
 
     def request(self, obj: Dict[str, Any], timeout: float = 1.0) -> Dict[str, Any]:
         self.send(obj)
@@ -460,7 +478,22 @@ class xArduinoSerialService:
     def _ingest_message(self, msg: Any) -> None:
         if not isinstance(msg, dict):
             return
+        self._metrics["rx_count"] += 1
         event_name = msg.get("event")
+        # If Arduino requested a neopixel animation, ACK its seq back so firmware can clear pending
+        if event_name == "neopixel_request":
+            seq = msg.get("seq")
+            try:
+                if seq is not None:
+                    # best-effort ACK immediately
+                    try:
+                        self._write_queue.put(( _json.dumps({"ok": True, "ack_seq": int(seq)}) + "\n" ).encode("utf-8"))
+                        self._metrics["acks_sent"] += 1
+                    except Exception:
+                        # swallow errors; ACK is best-effort
+                        pass
+            except Exception:
+                pass
         if event_name == "rfid":
             self._record_rfid(msg.get("uid"))
         if event_name:
@@ -505,3 +538,20 @@ class xArduinoSerialService:
         if fallback:
             return fallback
         return "COM3" if os.name == "nt" else "/dev/serial0"
+
+    def _writer_loop(self) -> None:
+        # background thread to serialize writes to serial port
+        while True:
+            try:
+                data = self._write_queue.get()
+                if data is None:
+                    break
+                try:
+                    self._ensure_connected()
+                    if self._ser:
+                        self._ser.write(data)
+                except Exception:
+                    time.sleep(0.01)
+            except Exception:
+                time.sleep(0.01)
+                continue
