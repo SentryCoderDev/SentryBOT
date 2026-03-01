@@ -115,9 +115,25 @@ void setup(){
   robot.begin();
   // Initialize and attach hall encoders (if enabled) after steppers are started
 #if HALL_ENCODER_ENABLED
-  g_hall0.begin(HALL_PIN_0, 4);
-  g_hall1.begin(HALL_PIN_1, 4);
+  // Load per-wheel pulses-per-rev from EEPROM if present, otherwise use config defaults
+  uint16_t ppr0 = HALL_PULSES_PER_REV_0;
+  uint16_t ppr1 = HALL_PULSES_PER_REV_1;
+  if (EEPROM.read(EEPROM_ADDR_HALL_MAGIC) == EEPROM_HALL_MAGIC){
+    uint16_t e0=0, e1=0;
+    EEPROM.get(EEPROM_ADDR_HALL_PPR_0, e0);
+    EEPROM.get(EEPROM_ADDR_HALL_PPR_1, e1);
+    if (e0 > 0 && e0 < 100) ppr0 = e0;
+    if (e1 > 0 && e1 < 100) ppr1 = e1;
+  }
+  // Begin hall encoders in analog mode if configured
+  g_hall0.begin(HALL_PIN_0, ppr0, (bool)HALL_ANALOG_MODE, HALL_ANALOG_THRESHOLD);
+  g_hall1.begin(HALL_PIN_1, ppr1, (bool)HALL_ANALOG_MODE, HALL_ANALOG_THRESHOLD);
   robot.steppers.attachHallEncoders(&g_hall0, &g_hall1);
+
+  // Auto-load PID gains from EEPROM for each motor (if present)
+  bool l0 = robot.steppers.loadPidFromEeprom(0);
+  bool l1 = robot.steppers.loadPidFromEeprom(1);
+  if (l0 || l1) Protocol::sendOk("pid_loaded");
 #endif
   // Initialize EBYTE radio (nRF24L01 compatible) and NEMA controller
 #if defined(RADIO_CE_PIN) && defined(RADIO_CSN_PIN)

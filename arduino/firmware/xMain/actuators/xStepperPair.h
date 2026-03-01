@@ -5,6 +5,7 @@
 #include <AccelStepper.h>
 #include "../xConfig.h"
 #include "../peripherals/xHallEncoder.h"
+#include "../xProtocol.h"
 #include <EEPROM.h>
 
 class StepperPair {
@@ -29,8 +30,8 @@ public:
       // default to enabled
       setEnable(true);
     #endif
-    // initialize PID timestamps
-    for (int i=0;i<2;i++){ _pid[i].lastMs = millis(); _pid[i].lastCount = 0; }
+    // initialize PID timestamps and movement tracker
+    for (int i=0;i<2;i++){ _pid[i].lastMs = millis(); _pid[i].lastCount = 0; _lastMovementMs[i] = millis(); }
   }
   void setMaxSpeed(float v){ s1.setMaxSpeed(v); s2.setMaxSpeed(v); }
   void setAcceleration(float a){ s1.setAcceleration(a); s2.setAcceleration(a); }
@@ -165,6 +166,8 @@ public:
           _pid[i].enabled = false;
           if (!ramps[0].active && !ramps[1].active){ setEnable(false); }
           if (i==0) s1.setSpeed(0); else s2.setSpeed(0);
+          // Emit a host-visible stall event so the controller can react
+          SERIAL_IO.println(String("{\"evt\":\"stall\",\"id\":") + String(i) + String("}"));
         }
       }
     }
@@ -265,9 +268,9 @@ public:
   // Configure PID gains for a motor
   void configurePid(uint8_t id, float kp, float ki, float kd){ if (id>1) return; _pid[id].kp=kp; _pid[id].ki=ki; _pid[id].kd=kd; }
   // Enable/disable closed-loop PID for a motor
-  void enablePid(uint8_t id, bool en){ if (id>1) return; _pid[id].enabled = en; if(en){ _pid[id].lastMs = millis(); _pid[id].lastCount = (_hall[id])? _hall[id]->getCount() : 0; _pid[id].integral = 0; _pid[id].lastError=0; } }
+  void enablePid(uint8_t id, bool en){ if (id>1) return; _pid[id].enabled = en; if(en){ _pid[id].lastMs = millis(); _pid[id].lastCount = (_hall[id])? _hall[id]->getCount() : 0; _pid[id].integral = 0; _pid[id].lastError=0; _lastMovementMs[id] = millis(); _stalled[id]=false; } }
   // Set desired speed (steps/s) for closed-loop; also enables PID for that motor
-  void setTargetSpeed(uint8_t id, float stepsPerSec){ if (id>1) return; _pid[id].targetSpeed = stepsPerSec; _pid[id].enabled = true; }
+  void setTargetSpeed(uint8_t id, float stepsPerSec){ if (id>1) return; _pid[id].targetSpeed = stepsPerSec; _pid[id].enabled = true; _lastMovementMs[id] = millis(); _stalled[id]=false; }
   // Stop closed-loop control for a motor
   void stopPid(uint8_t id){ if (id>1) return; _pid[id].enabled = false; }
 
