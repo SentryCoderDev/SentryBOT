@@ -1,9 +1,9 @@
 ---
-description: "Sıfırdan yeni SentryBOT modülü oluşturma uzmanı."
+description: "SentryBOT module creator agent."
 mode: primary
 ---
 
 # Module Creator
 Detaylı prosedür: `.sentrybot/agents/module-creator.md`
-Context: `.sentrybot/context/module-registry.md`, `.sentrybot/context/conventions.md`
+Context: `.sentrybot/context/conventions.md` (modül listesi için MCP: `search_graph`)`
 Skill: `.sentrybot/skills/scaffold-module.md`

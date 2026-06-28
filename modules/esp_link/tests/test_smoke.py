@@ -4,8 +4,8 @@ import pytest
 
 def test_import():
     """Modul import edilebilir mi?"""
-    from modules.esp_link import xxEspLinkService
-    assert xxEspLinkService is not None
+    from modules.esp_link import xEspLinkService
+    assert xEspLinkService is not None
 
 
 def test_config_loader():
@@ -17,8 +17,8 @@ def test_config_loader():
 
 def test_service_instantiation():
     """Service olusturulabilir mi?"""
-    from modules.esp_link import xxEspLinkService
-    svc = xxEspLinkService(config_overrides={})
+    from modules.esp_link import xEspLinkService
+    svc = xEspLinkService(cfg={})
     assert svc is not None
 
 

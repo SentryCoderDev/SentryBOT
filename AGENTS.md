@@ -1,6 +1,6 @@
-# AGENTS.md — AI Agent Keşif Dosyası
+# SentryBOT — AI Agent Entry Point
 
-Bu dosya, SentryBOT deposuyla çalışan tüm AI kodlama asistanlarının otomatik keşfedeceği rehber dosyasıdır.
+**Tek merkez:** `.sentrybot/AI_HUB.md`
 
 ## 📁 TEK MERKEZ: `.sentrybot/`
 
@@ -28,10 +28,10 @@ Tüm detaylı agent, skill, context ve template dosyaları **tek dizinde** topla
 │   ├── module-dependency-map.md
 │   └── debug-module.md
 ├── context/             # Bilgi tabanı
-│   ├── module-registry.md       # 29 modül listesi
-│   ├── api-surface.md           # Tüm HTTP endpoint'ler
+│   ├── (MCP ile değiştirildi)    # search_graph ile modül/route sorgulama
 │   ├── architecture-summary.md  # Mimari özet
-│   └── conventions.md           # Kod kuralları
+│   ├── conventions.md           # Kod kuralları
+│   └── roadmap-companion-vision.md  # Proje yol haritası
 └── templates/           # Modül iskelet şablonları
     └── module/ (8 dosya)
 ```
@@ -63,19 +63,8 @@ cp CLAUDE.md ~/.claude/CLAUDE.md
 ```
 
 ## Kritik Kurallar
-
-1. **DryCode** — Tekrar yok, sade, net
-2. **Arduino kontratı** — `contract.py` builder zorunlu
-3. **Config** — Hardcode yasak, YAML'den oku
-4. **Test** — Her modülde smoke test zorunlu
-5. **Modül yapısı** — `x<Name>Service.py` + `config_loader.py` + `api/router.py`
-
-## Hızlı Başlangıç
-
-| Görev | Oku |
-|-------|-----|
-| Yeni modül oluştur | `.sentrybot/agents/module-creator.md` → `.sentrybot/skills/scaffold-module.md` |
-| Modülü düzenle | `.sentrybot/agents/module-editor.md` → ilgili skill |
-| PR/Issue oluştur | `.sentrybot/agents/github-ops.md` → `create-pr.md` / `create-issue.md` |
-| Modüller arası bağlantı | `.sentrybot/agents/inter-module.md` → `module-dependency-map.md` |
-| Kod incele | `.sentrybot/agents/code-reviewer.md` |
+1. DryCode — tekrar yok, tek sorumluluk
+2. Modül yapısı — `x<Name>Service.py` + `config_loader.py` + `api/router.py`
+3. Arduino kontratı — `contract.py` builder zorunlu, elle payload YASAK
+4. Config — hardcode YASAK, YAML'den oku
+5. Test — her modülde `tests/test_smoke.py` zorunlu
